@@ -80,7 +80,7 @@ namespace SansMus
         
         public CellSelectedEventArgs? CellSelectedEventArgs { get; set; }
         
-        public GridOverlayForm(int gridRows, int gridCols, double gridOpacity, double gridBackgroundOpacity, Keys? toggleHotkey = null)
+        public GridOverlayForm(int gridRows, int gridCols, double gridOpacity, double gridBackgroundOpacity, Keys? toggleHotkey = null, Screen? targetScreen = null)
         {
             this.gridRows = gridRows;
             this.gridCols = gridCols;
@@ -88,14 +88,15 @@ namespace SansMus
             this.gridBackgroundOpacity = gridBackgroundOpacity;
             this.toggleHotkey = toggleHotkey;
             this.creationTime = DateTime.Now;
-            InitializeComponent();
+            InitializeComponent(targetScreen);
             InitializeGrid();
         }
         
-        private void InitializeComponent()
+        private void InitializeComponent(Screen? targetScreen = null)
         {
             this.FormBorderStyle = FormBorderStyle.None;
             this.WindowState = FormWindowState.Normal;
+            this.StartPosition = FormStartPosition.Manual; // Manual positioning to ensure correct monitor
             this.TopMost = true;
             this.ShowInTaskbar = false;
             
@@ -110,10 +111,14 @@ namespace SansMus
             // Set up layered window after form is loaded
             this.Load += GridOverlayForm_Load;
             
-            // Get the screen that contains the cursor
-            Point cursorPos = Cursor.Position;
-            Screen? cursorScreen = Screen.FromPoint(cursorPos);
-            Rectangle screenBounds = cursorScreen?.Bounds ?? Screen.PrimaryScreen?.Bounds ?? Screen.AllScreens[0].Bounds;
+            // Use the provided target screen, or detect the screen containing the cursor
+            Screen? screenToUse = targetScreen;
+            if (screenToUse == null)
+            {
+                Point cursorPos = Cursor.Position;
+                screenToUse = Screen.FromPoint(cursorPos);
+            }
+            Rectangle screenBounds = screenToUse?.Bounds ?? Screen.PrimaryScreen?.Bounds ?? Screen.AllScreens[0].Bounds;
             
             this.Location = new Point(screenBounds.Left, screenBounds.Top);
             this.Size = new Size(screenBounds.Width, screenBounds.Height);

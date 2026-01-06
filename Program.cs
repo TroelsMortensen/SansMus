@@ -280,10 +280,15 @@ namespace SansMus
                 // Get monitor config for the current cursor position
                 MonitorConfig monitorConfig = GetMonitorConfigForCursor();
                 
-                overlayForm = new GridOverlayForm(monitorConfig.Rows, monitorConfig.Columns, gridOpacity, gridBackgroundOpacity, configuredHotkey.Value);
+                // Get the screen that contains the cursor for proper positioning
+                Point cursorPos = Cursor.Position;
+                Screen? cursorScreen = Screen.FromPoint(cursorPos);
+                
+                overlayForm = new GridOverlayForm(monitorConfig.Rows, monitorConfig.Columns, gridOpacity, gridBackgroundOpacity, configuredHotkey.Value, cursorScreen);
                 overlayForm.CellSelected += OverlayForm_CellSelected;
                 
-                DialogResult result = overlayForm.ShowDialog(this);
+                // Use null as parent to prevent parent form from affecting positioning
+                DialogResult result = overlayForm.ShowDialog(null);
                 
                 if (result == DialogResult.OK && overlayForm.CellSelectedEventArgs != null)
                 {

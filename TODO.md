@@ -1,5 +1,3 @@
-- backspace instead of escape when moving back a letter cell
-- clearer transparency for overlay form
 - configuration file:  
   - grid options
   - mouse movement options

@@ -66,6 +66,7 @@ namespace SansMus
         private readonly Keys? toggleHotkey;
         private readonly DateTime creationTime;
         private static readonly TimeSpan ignoreHotkeyDuration = TimeSpan.FromMilliseconds(500); // 1 second delay for testing
+        private readonly List<string>? cellShortcuts;
         
         private string? firstLetter = null;
         private Dictionary<(int row, int col), string> cellLabels = new Dictionary<(int row, int col), string>();
@@ -80,13 +81,14 @@ namespace SansMus
         
         public CellSelectedEventArgs? CellSelectedEventArgs { get; set; }
         
-        public GridOverlayForm(int gridRows, int gridCols, double gridOpacity, double gridBackgroundOpacity, Keys? toggleHotkey = null, Screen? targetScreen = null)
+        public GridOverlayForm(int gridRows, int gridCols, double gridOpacity, double gridBackgroundOpacity, Keys? toggleHotkey = null, Screen? targetScreen = null, List<string>? cellShortcuts = null)
         {
             this.gridRows = gridRows;
             this.gridCols = gridCols;
             this.gridOpacity = gridOpacity;
             this.gridBackgroundOpacity = gridBackgroundOpacity;
             this.toggleHotkey = toggleHotkey;
+            this.cellShortcuts = cellShortcuts;
             this.creationTime = DateTime.Now;
             InitializeComponent(targetScreen);
             InitializeGrid();
@@ -139,6 +141,7 @@ namespace SansMus
             
             this.Paint += GridOverlayForm_Paint;
             this.KeyDown += GridOverlayForm_KeyDown;
+            this.KeyPress += GridOverlayForm_KeyPress;
             this.FormClosing += GridOverlayForm_FormClosing;
         }
         
@@ -155,58 +158,77 @@ namespace SansMus
         
         private void InitializeGrid()
         {
-            // Initialize letter mapping with grouping
-            // Group cells with same first letter together in rectangular regions
-            const int LETTERS_COUNT = 26;
-            
-            // Organize first letters in roughly rectangular regions
-            // Use 5 columns of first letters (5 cols × 6 rows = 30, but we only use 26)
-            const int FIRST_LETTER_COLS = 5;
-            const int FIRST_LETTER_ROWS = (LETTERS_COUNT + FIRST_LETTER_COLS - 1) / FIRST_LETTER_COLS; // 6
-            
-            for (int row = 0; row < gridRows; row++)
+            // Check if cellShortcuts are provided and have correct length
+            if (cellShortcuts != null && cellShortcuts.Count == gridRows * gridCols)
             {
-                for (int col = 0; col < gridCols; col++)
+                // Use shortcuts from config
+                for (int row = 0; row < gridRows; row++)
                 {
-                    // Calculate which first letter region this cell belongs to
-                    // Map grid position to first letter region
-                    int firstLetterCol = (col * FIRST_LETTER_COLS) / gridCols;
-                    int firstLetterRow = (row * FIRST_LETTER_ROWS) / gridRows;
-                    int firstLetterIndex = firstLetterRow * FIRST_LETTER_COLS + firstLetterCol;
-                    
-                    if (firstLetterIndex >= LETTERS_COUNT)
+                    for (int col = 0; col < gridCols; col++)
                     {
-                        firstLetterIndex = LETTERS_COUNT - 1; // Use last letter if overflow
+                        // Map array index to grid position: index = row * gridCols + col
+                        int index = row * gridCols + col;
+                        string label = cellShortcuts[index];
+                        cellLabels[(row, col)] = label;
                     }
-                    
-                    char firstLetter = (char)('A' + firstLetterIndex);
-                    
-                    // Calculate second letter within this first letter group
-                    // Count how many cells in this first letter group have been assigned
-                    int cellsInThisGroup = 0;
-                    for (int r = 0; r <= row; r++)
+                }
+            }
+            else
+            {
+                // Fall back to hardcoded generation for backward compatibility
+                // Initialize letter mapping with grouping
+                // Group cells with same first letter together in rectangular regions
+                const int LETTERS_COUNT = 26;
+                
+                // Organize first letters in roughly rectangular regions
+                // Use 5 columns of first letters (5 cols × 6 rows = 30, but we only use 26)
+                const int FIRST_LETTER_COLS = 5;
+                const int FIRST_LETTER_ROWS = (LETTERS_COUNT + FIRST_LETTER_COLS - 1) / FIRST_LETTER_COLS; // 6
+                
+                for (int row = 0; row < gridRows; row++)
+                {
+                    for (int col = 0; col < gridCols; col++)
                     {
-                        int startCol = (r == row) ? 0 : 0;
-                        int endCol = (r == row) ? col : gridCols;
+                        // Calculate which first letter region this cell belongs to
+                        // Map grid position to first letter region
+                        int firstLetterCol = (col * FIRST_LETTER_COLS) / gridCols;
+                        int firstLetterRow = (row * FIRST_LETTER_ROWS) / gridRows;
+                        int firstLetterIndex = firstLetterRow * FIRST_LETTER_COLS + firstLetterCol;
                         
-                        for (int c = startCol; c < endCol; c++)
+                        if (firstLetterIndex >= LETTERS_COUNT)
                         {
-                            int prevFirstLetterCol = (c * FIRST_LETTER_COLS) / gridCols;
-                            int prevFirstLetterRow = (r * FIRST_LETTER_ROWS) / gridRows;
-                            int prevFirstLetterIndex = prevFirstLetterRow * FIRST_LETTER_COLS + prevFirstLetterCol;
-                            if (prevFirstLetterIndex >= LETTERS_COUNT) prevFirstLetterIndex = LETTERS_COUNT - 1;
+                            firstLetterIndex = LETTERS_COUNT - 1; // Use last letter if overflow
+                        }
+                        
+                        char firstLetter = (char)('A' + firstLetterIndex);
+                        
+                        // Calculate second letter within this first letter group
+                        // Count how many cells in this first letter group have been assigned
+                        int cellsInThisGroup = 0;
+                        for (int r = 0; r <= row; r++)
+                        {
+                            int startCol = (r == row) ? 0 : 0;
+                            int endCol = (r == row) ? col : gridCols;
                             
-                            if (prevFirstLetterIndex == firstLetterIndex)
+                            for (int c = startCol; c < endCol; c++)
                             {
-                                cellsInThisGroup++;
+                                int prevFirstLetterCol = (c * FIRST_LETTER_COLS) / gridCols;
+                                int prevFirstLetterRow = (r * FIRST_LETTER_ROWS) / gridRows;
+                                int prevFirstLetterIndex = prevFirstLetterRow * FIRST_LETTER_COLS + prevFirstLetterCol;
+                                if (prevFirstLetterIndex >= LETTERS_COUNT) prevFirstLetterIndex = LETTERS_COUNT - 1;
+                                
+                                if (prevFirstLetterIndex == firstLetterIndex)
+                                {
+                                    cellsInThisGroup++;
+                                }
                             }
                         }
+                        
+                        char secondLetter = (char)('A' + (cellsInThisGroup % 26));
+                        
+                        string label = $"{firstLetter}{secondLetter}";
+                        cellLabels[(row, col)] = label;
                     }
-                    
-                    char secondLetter = (char)('A' + (cellsInThisGroup % 26));
-                    
-                    string label = $"{firstLetter}{secondLetter}";
-                    cellLabels[(row, col)] = label;
                 }
             }
         }
@@ -454,6 +476,68 @@ namespace SansMus
                     
                     e.Handled = true;
                 }
+            }
+        }
+        
+        private void GridOverlayForm_KeyPress(object? sender, KeyPressEventArgs e)
+        {
+            // Handle special characters (comma, period, Danish letters å/æ/ø, etc.)
+            // KeyDown handles A-Z keys, so we skip them here to avoid double handling
+            // Skip if it's a control character
+            if (char.IsControl(e.KeyChar))
+            {
+                return;
+            }
+            
+            // Skip A-Z as they're handled by KeyDown for consistency
+            if ((e.KeyChar >= 'A' && e.KeyChar <= 'Z') || (e.KeyChar >= 'a' && e.KeyChar <= 'z'))
+            {
+                return;
+            }
+            
+            // Convert character to string for matching
+            string charStr = e.KeyChar.ToString();
+            
+            if (firstLetter == null)
+            {
+                // First character
+                firstLetter = charStr;
+                UpdateLayeredWindowBitmap(); // Redraw to show filtered cells
+                e.Handled = true;
+            }
+            else
+            {
+                // Second character
+                string targetLabel = firstLetter + charStr;
+                
+                // Find cell with this label
+                var cell = cellLabels.FirstOrDefault(kvp => kvp.Value.Equals(targetLabel, StringComparison.OrdinalIgnoreCase));
+                
+                if (cell.Key != default)
+                {
+                    // Calculate cell center using variable cell sizes
+                    int cellX = GetCellX(cell.Key.col);
+                    int cellY = GetCellY(cell.Key.row);
+                    int cellW = GetCellWidth(cell.Key.col);
+                    int cellH = GetCellHeight(cell.Key.row);
+                    
+                    int centerX = cellX + (cellW / 2);
+                    int centerY = cellY + (cellH / 2);
+                    
+                    // Add screen offset (in case of multi-monitor setup)
+                    Point screenLocation = this.Location;
+                    centerX += screenLocation.X;
+                    centerY += screenLocation.Y;
+                    
+                    // Store event args and trigger event
+                    CellSelectedEventArgs = new CellSelectedEventArgs(cell.Key.row, cell.Key.col, new Point(centerX, centerY));
+                    CellSelected?.Invoke(this, CellSelectedEventArgs);
+                    
+                    this.DialogResult = DialogResult.OK;
+                    this.Close();
+                }
+                
+                e.Handled = true;
             }
         }
         

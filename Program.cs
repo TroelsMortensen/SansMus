@@ -17,6 +17,7 @@ namespace SansMus
         private List<MonitorConfig>? monitorConfigs = null;
         private double gridOpacity = 1.0; // Default: fully opaque grid
         private double gridBackgroundOpacity = 0.7; // Default: 70% opaque background
+        private string? duplicateWarning = null;
         
         public MainForm()
         {
@@ -60,14 +61,29 @@ namespace SansMus
             this.FormClosing += MainForm_FormClosing;
             
             string hotkeyText = configuredHotkey?.ToString() ?? "SPACE";
+            string labelText = $"Press {hotkeyText} to show grid overlay.\nPress ESC in overlay to close.";
+            
+            // Append duplicate warning if present
+            if (duplicateWarning != null)
+            {
+                labelText += "\n\n" + duplicateWarning;
+            }
+            
             infoLabel = new Label
             {
-                Text = $"Press {hotkeyText} to show grid overlay.\nPress ESC in overlay to close.",
+                Text = labelText,
                 Dock = DockStyle.Top,
                 Height = 100,
                 TextAlign = System.Drawing.ContentAlignment.MiddleCenter,
                 AutoSize = false
             };
+            
+            // Set warning color if duplicates were found
+            if (duplicateWarning != null && configError == null)
+            {
+                infoLabel.ForeColor = System.Drawing.Color.Orange;
+            }
+            
             this.Controls.Add(infoLabel);
             
             testButton = new Button
@@ -192,6 +208,19 @@ namespace SansMus
                                 cellShortcuts.Add(shortcut.GetString() ?? "");
                             }
                         }
+                        
+                        // Validate array length matches grid size
+                        int expectedCount = rows * cols;
+                        if (cellShortcuts.Count != expectedCount)
+                        {
+                            // If length doesn't match, set to null to use fallback generation
+                            cellShortcuts = null;
+                        }
+                        else
+                        {
+                            // Validate and fix duplicates
+                            cellShortcuts = ValidateAndFixDuplicates(cellShortcuts, rows, cols, monitorConfigs.Count);
+                        }
                     }
                     
                     monitorConfigs.Add(new MonitorConfig
@@ -202,6 +231,113 @@ namespace SansMus
                     });
                 }
             }
+        }
+        
+        private List<string> ValidateAndFixDuplicates(List<string> cellShortcuts, int rows, int cols, int monitorIndex)
+        {
+            // Create a dictionary to track which indices contain each shortcut
+            Dictionary<string, List<int>> shortcutIndices = new Dictionary<string, List<int>>(StringComparer.OrdinalIgnoreCase);
+            
+            for (int i = 0; i < cellShortcuts.Count; i++)
+            {
+                string shortcut = cellShortcuts[i];
+                if (!shortcutIndices.ContainsKey(shortcut))
+                {
+                    shortcutIndices[shortcut] = new List<int>();
+                }
+                shortcutIndices[shortcut].Add(i);
+            }
+            
+            // Find duplicates
+            List<string> duplicateReplacements = new List<string>();
+            HashSet<string> usedShortcuts = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            
+            // First pass: identify unique shortcuts
+            foreach (var kvp in shortcutIndices)
+            {
+                if (kvp.Value.Count == 1)
+                {
+                    usedShortcuts.Add(kvp.Key);
+                }
+            }
+            
+            // Generate sequential unused combinations
+            List<string> replacementList = new List<string>();
+            for (char first = 'A'; first <= 'Z'; first++)
+            {
+                for (char second = 'A'; second <= 'Z'; second++)
+                {
+                    string combo = $"{first}{second}";
+                    if (!usedShortcuts.Contains(combo))
+                    {
+                        replacementList.Add(combo);
+                    }
+                }
+            }
+            
+            int replacementIndex = 0;
+            List<string> fixedShortcuts = new List<string>(cellShortcuts);
+            HashSet<string> allUsedShortcuts = new HashSet<string>(fixedShortcuts, StringComparer.OrdinalIgnoreCase);
+            
+            // Replace duplicates
+            foreach (var kvp in shortcutIndices)
+            {
+                if (kvp.Value.Count > 1)
+                {
+                    // This shortcut appears multiple times - replace all but the first occurrence
+                    string duplicateShortcut = kvp.Key;
+                    for (int i = 1; i < kvp.Value.Count; i++)
+                    {
+                        int indexToReplace = kvp.Value[i];
+                        
+                        // Find next unused replacement
+                        string? replacement = null;
+                        while (replacementIndex < replacementList.Count)
+                        {
+                            string candidate = replacementList[replacementIndex++];
+                            if (!allUsedShortcuts.Contains(candidate))
+                            {
+                                replacement = candidate;
+                                break;
+                            }
+                        }
+                        
+                        if (replacement == null)
+                        {
+                            // Fallback: generate a unique replacement using numbers
+                            int fallbackNum = 1;
+                            do
+                            {
+                                replacement = $"AA{fallbackNum++}";
+                            } while (allUsedShortcuts.Contains(replacement));
+                        }
+                        
+                        // Calculate row and col from index
+                        int row = indexToReplace / cols;
+                        int col = indexToReplace % cols;
+                        
+                        fixedShortcuts[indexToReplace] = replacement;
+                        duplicateReplacements.Add($"Monitor {monitorIndex}, cell ({row},{col}): '{duplicateShortcut}' -> '{replacement}'");
+                        allUsedShortcuts.Add(replacement);
+                    }
+                }
+            }
+            
+            // Build warning message if duplicates were found
+            if (duplicateReplacements.Count > 0)
+            {
+                string warning = "Warning: Duplicate cell shortcuts found and replaced:\n" + string.Join("\n", duplicateReplacements);
+                if (duplicateWarning == null)
+                {
+                    duplicateWarning = warning;
+                }
+                else
+                {
+                    duplicateWarning += "\n\n" + warning;
+                }
+            }
+            
+            return fixedShortcuts;
         }
         
         private Keys? ParseHotkey(string hotkeyStr)
@@ -284,7 +420,7 @@ namespace SansMus
                 Point cursorPos = Cursor.Position;
                 Screen? cursorScreen = Screen.FromPoint(cursorPos);
                 
-                overlayForm = new GridOverlayForm(monitorConfig.Rows, monitorConfig.Columns, gridOpacity, gridBackgroundOpacity, configuredHotkey.Value, cursorScreen);
+                overlayForm = new GridOverlayForm(monitorConfig.Rows, monitorConfig.Columns, gridOpacity, gridBackgroundOpacity, configuredHotkey.Value, cursorScreen, monitorConfig.CellShortcuts);
                 overlayForm.CellSelected += OverlayForm_CellSelected;
                 
                 // Use null as parent to prevent parent form from affecting positioning

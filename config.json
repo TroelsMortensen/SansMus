@@ -9,22 +9,22 @@
         "numOfColumns": 18,
         "cellShortcuts": [
           "qq", "qw", "ww", "we", "ee", "er", "rr", "rt", "tt", "yy", "uy", "uu", "iu", "ii", "oi", "oo", "po", "pp",
-          "qa", "qs", "ws", "wd", "ed", "ef", "rf", "rg", "tg", "ll", "kl", "kk", "jk", "jj", "hj", "hh", "jh", "jj",
-          "aq", "aw", "sw", "se", "de", "dr", "fr", "fg", "gt", "ll", "kl", "kk", "jk", "jj", "hj", "hh", "jh", "jj",
-          "aa", "as", "ss", "sd", "dd", "df", "ff", "fg", "gg", "ll", "kl", "kk", "jk", "jj", "hj", "hh", "jh", "jj",
-          "az", "ax", "sz", "sx", "dx", "dc", "fc", "fv", "gv", "nn", "mn", "mm", "nm", "nn", "mn", "mm", "nm", "nn",
-          "za", "zs", "xs", "xd", "cd", "cf", "vf", "vg", "bv", "nn", "mn", "mm", "nm", "nn", "mn", "mm", "nm", "nn",
-          "zz", "zx", "xx", "xc", "cc", "cv", "vv", "vb", "bb", "åå", "å.", "å,", ",å", ",,", ".,", "m,", "mm", "mn"
+          "qa", "qs", "ws", "wd", "ed", "ef", "rf", "rg", "tg", "yh", "uh", "uj", "ij", "ik", "ok", "ol", "pl", "pæ",
+          "aq", "aw", "sw", "se", "de", "dr", "fr", "ft", "gt", "hy", "jy", "ju", "ku", "ki", "li", "lo", "æo", "æp",
+          "aa", "as", "ss", "sd", "dd", "df", "ff", "fg", "gg", "hh", "jh", "jj", "kj", "kk", "lk", "ll", "æl", "ææ",
+          "az", "ax", "sz", "sx", "dx", "dc", "fc", "fv", "gv", "hn", "jn", "jm", "km", "k,", "l,", "l.", "æ.", "æå",
+          "za", "zs", "xs", "xd", "cd", "cf", "vf", "vg", "bv", "nh", "mh", "mj", ",j", ",k", ".k", ".l", "ål", "åæ",
+          "zz", "zx", "xx", "xc", "cc", "cv", "vv", "vb", "bb", "nn", "mn", "mm", ",m", ",,", ".,", "..", "å.", "åå"
         ]
       },
       {
         "numOfRows": 4,
         "numOfColumns": 7,
         "cellShortcuts": [
-          "qq", "qw", "ww", "yy", "uy", "uu", "iu",
-          "aa", "as", "ss", "ll", "kl", "kk", "jk",
-          "aa", "as", "ss", "ll", "kl", "kk", "jk",
-          "zz", "zx", "xx", "åå", "å.", "å,", ",å"
+          "er", "rr", "rt", "tt", "yy", "uy", "uu",
+          "dr", "fr", "fg", "gt", "hy", "jy", "ju",
+          "df", "ff", "fg", "gg", "hh", "jh", "jj",
+          "cv", "vv", "vb", "bb", "nn", "mn", "mm"
         ]
       }
     ]

@@ -15,6 +15,8 @@ namespace SansMus
         private Label? infoLabel;
         private Button? testButton;
         private List<MonitorConfig>? monitorConfigs = null;
+        private double gridOpacity = 1.0; // Default: fully opaque grid
+        private double gridBackgroundOpacity = 0.7; // Default: 70% opaque background
         
         public MainForm()
         {
@@ -110,6 +112,31 @@ namespace SansMus
                 if (configuredHotkey == null)
                 {
                     throw new InvalidOperationException($"Invalid hotkey value: '{hotkeyStr}'. Supported values: Space, F1-F24, Enter, Escape, etc.");
+                }
+                
+                // Load opacity settings
+                if (warpGrid.TryGetProperty("gridOpacity", out var gridOpacityProp))
+                {
+                    if (gridOpacityProp.ValueKind == JsonValueKind.Number)
+                    {
+                        gridOpacity = gridOpacityProp.GetDouble();
+                        if (gridOpacity < 0.0 || gridOpacity > 1.0)
+                        {
+                            throw new InvalidOperationException($"gridOpacity must be between 0.0 and 1.0, got {gridOpacity}.");
+                        }
+                    }
+                }
+                
+                if (warpGrid.TryGetProperty("gridBackgroundOpacity", out var gridBackgroundOpacityProp))
+                {
+                    if (gridBackgroundOpacityProp.ValueKind == JsonValueKind.Number)
+                    {
+                        gridBackgroundOpacity = gridBackgroundOpacityProp.GetDouble();
+                        if (gridBackgroundOpacity < 0.0 || gridBackgroundOpacity > 1.0)
+                        {
+                            throw new InvalidOperationException($"gridBackgroundOpacity must be between 0.0 and 1.0, got {gridBackgroundOpacity}.");
+                        }
+                    }
                 }
                 
                 // Load monitor configurations
@@ -252,7 +279,7 @@ namespace SansMus
                 // Get monitor config for the current cursor position
                 MonitorConfig monitorConfig = GetMonitorConfigForCursor();
                 
-                overlayForm = new GridOverlayForm(monitorConfig.Rows, monitorConfig.Columns);
+                overlayForm = new GridOverlayForm(monitorConfig.Rows, monitorConfig.Columns, gridOpacity, gridBackgroundOpacity);
                 overlayForm.CellSelected += OverlayForm_CellSelected;
                 
                 DialogResult result = overlayForm.ShowDialog(this);

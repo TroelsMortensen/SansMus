@@ -1,15 +1,68 @@
 using System;
 using System.Collections.Generic;
 using System.Drawing;
+using System.Drawing.Imaging;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Windows.Forms;
 
 namespace SansMus
 {
     public partial class GridOverlayForm : Form
     {
+        // Windows API for layered window support
+        private const int WS_EX_LAYERED = 0x80000;
+        private const int GWL_EXSTYLE = -20;
+        private const uint ULW_ALPHA = 0x2;
+        
+        [StructLayout(LayoutKind.Sequential)]
+        private struct BLENDFUNCTION
+        {
+            public byte BlendOp;
+            public byte BlendFlags;
+            public byte SourceConstantAlpha;
+            public byte AlphaFormat;
+            
+            public BLENDFUNCTION(byte opacity)
+            {
+                BlendOp = 0; // AC_SRC_OVER
+                BlendFlags = 0;
+                SourceConstantAlpha = opacity;
+                AlphaFormat = 1; // AC_SRC_ALPHA
+            }
+        }
+        
+        [DllImport("user32.dll", SetLastError = true)]
+        private static extern int GetWindowLong(IntPtr hWnd, int nIndex);
+        
+        [DllImport("user32.dll")]
+        private static extern int SetWindowLong(IntPtr hWnd, int nIndex, int dwNewLong);
+        
+        [DllImport("user32.dll")]
+        private static extern bool UpdateLayeredWindow(IntPtr hwnd, IntPtr hdcDst, ref Point pptDst, 
+            ref Size psize, IntPtr hdcSrc, ref Point pptSrc, uint crKey, ref BLENDFUNCTION pblend, uint dwFlags);
+        
+        [DllImport("gdi32.dll")]
+        private static extern IntPtr CreateCompatibleDC(IntPtr hDC);
+        
+        [DllImport("gdi32.dll")]
+        private static extern IntPtr SelectObject(IntPtr hDC, IntPtr hGDIObj);
+        
+        [DllImport("gdi32.dll")]
+        private static extern bool DeleteObject(IntPtr hObject);
+        
+        [DllImport("gdi32.dll")]
+        private static extern bool DeleteDC(IntPtr hDC);
+        
+        [DllImport("user32.dll")]
+        private static extern IntPtr GetDC(IntPtr hWnd);
+        
+        [DllImport("user32.dll")]
+        private static extern int ReleaseDC(IntPtr hWnd, IntPtr hDC);
         private readonly int gridRows;
         private readonly int gridCols;
+        private readonly double gridOpacity;
+        private readonly double gridBackgroundOpacity;
         
         private string? firstLetter = null;
         private Dictionary<(int row, int col), string> cellLabels = new Dictionary<(int row, int col), string>();
@@ -24,10 +77,12 @@ namespace SansMus
         
         public CellSelectedEventArgs? CellSelectedEventArgs { get; set; }
         
-        public GridOverlayForm(int gridRows, int gridCols)
+        public GridOverlayForm(int gridRows, int gridCols, double gridOpacity, double gridBackgroundOpacity)
         {
             this.gridRows = gridRows;
             this.gridCols = gridCols;
+            this.gridOpacity = gridOpacity;
+            this.gridBackgroundOpacity = gridBackgroundOpacity;
             InitializeComponent();
             InitializeGrid();
         }
@@ -38,10 +93,17 @@ namespace SansMus
             this.WindowState = FormWindowState.Normal;
             this.TopMost = true;
             this.ShowInTaskbar = false;
-            this.BackColor = Color.Black; // Solid black background
-            this.Opacity = 0.7; // Make form 70% opaque (30% transparent)
+            
+            this.BackColor = Color.Black; // Background color (not visible with layered window - transparency handled by bitmap alpha)
+            this.Opacity = 1.0; // Fully opaque form - transparency controlled via layered window
             this.KeyPreview = true;
             this.DoubleBuffered = true;
+            
+            // Enable proper painting for alpha blending
+            this.SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.UserPaint, true);
+            
+            // Set up layered window after form is loaded
+            this.Load += GridOverlayForm_Load;
             
             // Get the screen that contains the cursor
             Point cursorPos = Cursor.Position;
@@ -68,6 +130,17 @@ namespace SansMus
             this.Paint += GridOverlayForm_Paint;
             this.KeyDown += GridOverlayForm_KeyDown;
             this.FormClosing += GridOverlayForm_FormClosing;
+        }
+        
+        private void GridOverlayForm_Load(object? sender, EventArgs e)
+        {
+            // Enable layered window style for per-pixel alpha transparency
+            int exStyle = GetWindowLong(this.Handle, GWL_EXSTYLE);
+            exStyle |= WS_EX_LAYERED;
+            SetWindowLong(this.Handle, GWL_EXSTYLE, exStyle);
+            
+            // Update the layered window with initial bitmap
+            UpdateLayeredWindowBitmap();
         }
         
         private void InitializeGrid()
@@ -162,64 +235,110 @@ namespace SansMus
             return y;
         }
         
-        private void GridOverlayForm_Paint(object? sender, PaintEventArgs e)
+        private void UpdateLayeredWindowBitmap()
         {
-            Graphics g = e.Graphics;
-            g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
-            g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAlias;
+            if (this.Width <= 0 || this.Height <= 0)
+                return;
             
-            // Draw grid lines
-            Pen gridPen = new Pen(Color.White, 1);
-            
-            // Vertical lines
-            for (int col = 0; col <= gridCols; col++)
+            // Create bitmap with per-pixel alpha support
+            using (Bitmap bitmap = new Bitmap(this.Width, this.Height, PixelFormat.Format32bppArgb))
             {
-                int x = GetCellX(col);
-                g.DrawLine(gridPen, x, 0, x, this.Height);
-            }
-            
-            // Horizontal lines
-            for (int row = 0; row <= gridRows; row++)
-            {
-                int y = GetCellY(row);
-                g.DrawLine(gridPen, 0, y, this.Width, y);
-            }
-            
-            gridPen.Dispose();
-            
-            // Draw cell labels
-            Font labelFont = new Font("Arial", 14, FontStyle.Bold);
-            Brush textBrush = new SolidBrush(Color.White);
-            StringFormat format = new StringFormat
-            {
-                Alignment = StringAlignment.Center,
-                LineAlignment = StringAlignment.Center
-            };
-            
-            foreach (var kvp in cellLabels)
-            {
-                (int row, int col) = kvp.Key;
-                string label = kvp.Value;
-                
-                // If hint mode is active, only show cells starting with firstLetter
-                if (firstLetter != null && !label.StartsWith(firstLetter, StringComparison.OrdinalIgnoreCase))
+                using (Graphics g = Graphics.FromImage(bitmap))
                 {
-                    continue;
+                    g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+                    g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAlias;
+                    
+                    // Draw grid lines with semi-transparent white using gridOpacity
+                    // This will blend with the desktop behind the form
+                    int gridAlpha = (int)(gridOpacity * 255);
+                    Color gridColor = Color.FromArgb(gridAlpha, Color.White);
+                    using (Pen gridPen = new Pen(gridColor, 1))
+                    {
+                        // Vertical lines
+                        for (int col = 0; col <= gridCols; col++)
+                        {
+                            int x = GetCellX(col);
+                            g.DrawLine(gridPen, x, 0, x, this.Height);
+                        }
+                        
+                        // Horizontal lines
+                        for (int row = 0; row <= gridRows; row++)
+                        {
+                            int y = GetCellY(row);
+                            g.DrawLine(gridPen, 0, y, this.Width, y);
+                        }
+                    }
+                    
+                    // Draw cell labels with opacity based on gridOpacity
+                    int textAlpha = (int)(gridOpacity * 255);
+                    Color textColor = Color.FromArgb(textAlpha, Color.White);
+                    using (Font labelFont = new Font("Arial", 14, FontStyle.Bold))
+                    using (Brush textBrush = new SolidBrush(textColor))
+                    using (StringFormat format = new StringFormat
+                    {
+                        Alignment = StringAlignment.Center,
+                        LineAlignment = StringAlignment.Center
+                    })
+                    {
+                        foreach (var kvp in cellLabels)
+                        {
+                            (int row, int col) = kvp.Key;
+                            string label = kvp.Value;
+                            
+                            // If hint mode is active, only show cells starting with firstLetter
+                            if (firstLetter != null && !label.StartsWith(firstLetter, StringComparison.OrdinalIgnoreCase))
+                            {
+                                continue;
+                            }
+                            
+                            Rectangle cellRect = new Rectangle(
+                                GetCellX(col),
+                                GetCellY(row),
+                                GetCellWidth(col),
+                                GetCellHeight(row)
+                            );
+                            
+                            g.DrawString(label, labelFont, textBrush, cellRect, format);
+                        }
+                    }
                 }
                 
-                Rectangle cellRect = new Rectangle(
-                    GetCellX(col),
-                    GetCellY(row),
-                    GetCellWidth(col),
-                    GetCellHeight(row)
-                );
+                // Update the layered window with the bitmap
+                IntPtr screenDc = GetDC(IntPtr.Zero);
+                IntPtr memDc = CreateCompatibleDC(screenDc);
+                IntPtr hBitmap = IntPtr.Zero;
+                IntPtr hOldBitmap = IntPtr.Zero;
                 
-                g.DrawString(label, labelFont, textBrush, cellRect, format);
+                try
+                {
+                    hBitmap = bitmap.GetHbitmap(Color.FromArgb(0));
+                    hOldBitmap = SelectObject(memDc, hBitmap);
+                    
+                    Point topLeft = new Point(this.Left, this.Top);
+                    Size size = new Size(this.Width, this.Height);
+                    Point sourceLocation = new Point(0, 0);
+                    BLENDFUNCTION blend = new BLENDFUNCTION(255);
+                    
+                    UpdateLayeredWindow(this.Handle, screenDc, ref topLeft, ref size, 
+                        memDc, ref sourceLocation, 0, ref blend, ULW_ALPHA);
+                }
+                finally
+                {
+                    ReleaseDC(IntPtr.Zero, screenDc);
+                    if (hBitmap != IntPtr.Zero)
+                    {
+                        SelectObject(memDc, hOldBitmap);
+                        DeleteObject(hBitmap);
+                    }
+                    DeleteDC(memDc);
+                }
             }
-            
-            labelFont.Dispose();
-            textBrush.Dispose();
-            format.Dispose();
+        }
+        
+        private void GridOverlayForm_Paint(object? sender, PaintEventArgs e)
+        {
+            // Use layered window bitmap update instead of direct painting
+            UpdateLayeredWindowBitmap();
         }
         
         private void GridOverlayForm_KeyDown(object? sender, KeyEventArgs e)
@@ -230,7 +349,7 @@ namespace SansMus
                 if (e.KeyCode >= Keys.A && e.KeyCode <= Keys.Z)
                 {
                     firstLetter = e.KeyCode.ToString().ToUpper();
-                    this.Invalidate(); // Redraw to show filtered cells
+                    UpdateLayeredWindowBitmap(); // Redraw to show filtered cells
                     e.Handled = true;
                 }
                 else if (e.KeyCode == Keys.Escape)
@@ -281,7 +400,7 @@ namespace SansMus
                 {
                     // Cancel hint mode, return to full grid
                     firstLetter = null;
-                    this.Invalidate();
+                    UpdateLayeredWindowBitmap();
                     e.Handled = true;
                 }
             }
@@ -302,7 +421,7 @@ namespace SansMus
         public void ResetHintMode()
         {
             firstLetter = null;
-            this.Invalidate();
+            UpdateLayeredWindowBitmap();
         }
     }
     

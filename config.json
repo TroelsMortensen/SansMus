@@ -1,7 +1,8 @@
 {
   "WarpGrid": {
     "hotkey": "F13",
-    "opacity": 0.7,
+    "gridOpacity": 1.0,
+    "gridBackgroundOpacity": 1.0,
     "monitors": [
       {
         "numOfRows": 7,

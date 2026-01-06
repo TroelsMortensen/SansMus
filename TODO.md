@@ -6,6 +6,8 @@
   - grid options
   - mouse movement options
 - 7 cells op. X hen. Layout letter combos 
+- Bedre måder at fjerne grid overlay igen, cancel
+- Validering af cell shortcuts, der må ikke være duplicates for en monitor.
 
 Qq qw ww we ee er...
 qa qs

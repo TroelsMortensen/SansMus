@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
 using System.Windows.Forms;
@@ -13,6 +14,7 @@ namespace SansMus
         private string? configError = null;
         private Label? infoLabel;
         private Button? testButton;
+        private List<MonitorConfig>? monitorConfigs = null;
         
         public MainForm()
         {
@@ -109,6 +111,69 @@ namespace SansMus
                 {
                     throw new InvalidOperationException($"Invalid hotkey value: '{hotkeyStr}'. Supported values: Space, F1-F24, Enter, Escape, etc.");
                 }
+                
+                // Load monitor configurations
+                if (!warpGrid.TryGetProperty("monitors", out var monitorsProp))
+                {
+                    throw new InvalidOperationException("Configuration file missing 'monitors' array in WarpGrid section.");
+                }
+                
+                if (monitorsProp.ValueKind != JsonValueKind.Array)
+                {
+                    throw new InvalidOperationException("'monitors' must be an array.");
+                }
+                
+                if (monitorsProp.GetArrayLength() == 0)
+                {
+                    throw new InvalidOperationException("'monitors' array must contain at least one monitor configuration.");
+                }
+                
+                monitorConfigs = new List<MonitorConfig>();
+                foreach (var monitorElement in monitorsProp.EnumerateArray())
+                {
+                    if (!monitorElement.TryGetProperty("numOfRows", out var rowsProp))
+                    {
+                        throw new InvalidOperationException("Monitor configuration missing 'numOfRows'.");
+                    }
+                    
+                    if (!monitorElement.TryGetProperty("numOfColumns", out var colsProp))
+                    {
+                        throw new InvalidOperationException("Monitor configuration missing 'numOfColumns'.");
+                    }
+                    
+                    int rows = rowsProp.GetInt32();
+                    int cols = colsProp.GetInt32();
+                    
+                    if (rows <= 0)
+                    {
+                        throw new InvalidOperationException($"Monitor configuration has invalid 'numOfRows': {rows}. Must be a positive integer.");
+                    }
+                    
+                    if (cols <= 0)
+                    {
+                        throw new InvalidOperationException($"Monitor configuration has invalid 'numOfColumns': {cols}. Must be a positive integer.");
+                    }
+                    
+                    List<string>? cellShortcuts = null;
+                    if (monitorElement.TryGetProperty("cellShortcuts", out var shortcutsProp) && shortcutsProp.ValueKind == JsonValueKind.Array)
+                    {
+                        cellShortcuts = new List<string>();
+                        foreach (var shortcut in shortcutsProp.EnumerateArray())
+                        {
+                            if (shortcut.ValueKind == JsonValueKind.String)
+                            {
+                                cellShortcuts.Add(shortcut.GetString() ?? "");
+                            }
+                        }
+                    }
+                    
+                    monitorConfigs.Add(new MonitorConfig
+                    {
+                        Rows = rows,
+                        Columns = cols,
+                        CellShortcuts = cellShortcuts
+                    });
+                }
             }
         }
         
@@ -176,9 +241,18 @@ namespace SansMus
                 return;
             }
             
+            if (monitorConfigs == null || monitorConfigs.Count == 0)
+            {
+                MessageBox.Show("No monitor configurations available.", "Configuration Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+            
             try
             {
-                overlayForm = new GridOverlayForm();
+                // Get monitor config for the current cursor position
+                MonitorConfig monitorConfig = GetMonitorConfigForCursor();
+                
+                overlayForm = new GridOverlayForm(monitorConfig.Rows, monitorConfig.Columns);
                 overlayForm.CellSelected += OverlayForm_CellSelected;
                 
                 DialogResult result = overlayForm.ShowDialog(this);
@@ -196,6 +270,44 @@ namespace SansMus
             {
                 MessageBox.Show($"Error in ShowGridOverlay: {ex.Message}\n{ex.StackTrace}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
+        }
+        
+        private MonitorConfig GetMonitorConfigForCursor()
+        {
+            if (monitorConfigs == null || monitorConfigs.Count == 0)
+            {
+                throw new InvalidOperationException("No monitor configurations available.");
+            }
+            
+            // Get the screen that contains the cursor
+            Point cursorPos = Cursor.Position;
+            Screen? cursorScreen = Screen.FromPoint(cursorPos);
+            
+            if (cursorScreen == null)
+            {
+                // Fallback to primary screen
+                return monitorConfigs[0];
+            }
+            
+            // Find the index of the screen in Screen.AllScreens
+            Screen[] allScreens = Screen.AllScreens;
+            int screenIndex = -1;
+            for (int i = 0; i < allScreens.Length; i++)
+            {
+                if (allScreens[i].Bounds.Equals(cursorScreen.Bounds))
+                {
+                    screenIndex = i;
+                    break;
+                }
+            }
+            
+            // If screen not found or index is out of bounds, use first monitor config
+            if (screenIndex < 0 || screenIndex >= monitorConfigs.Count)
+            {
+                return monitorConfigs[0];
+            }
+            
+            return monitorConfigs[screenIndex];
         }
         
         private void OverlayForm_CellSelected(object? sender, CellSelectedEventArgs e)
@@ -221,5 +333,12 @@ namespace SansMus
             Application.SetCompatibleTextRenderingDefault(false);
             Application.Run(new MainForm());
         }
+    }
+    
+    internal class MonitorConfig
+    {
+        public int Rows { get; set; }
+        public int Columns { get; set; }
+        public List<string>? CellShortcuts { get; set; }
     }
 }

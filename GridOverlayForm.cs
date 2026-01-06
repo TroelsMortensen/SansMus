@@ -8,8 +8,8 @@ namespace SansMus
 {
     public partial class GridOverlayForm : Form
     {
-        private const int GRID_ROWS = 10;
-        private const int GRID_COLS = 24;
+        private readonly int gridRows;
+        private readonly int gridCols;
         
         private string? firstLetter = null;
         private Dictionary<(int row, int col), string> cellLabels = new Dictionary<(int row, int col), string>();
@@ -17,8 +17,10 @@ namespace SansMus
         private int cellHeight;
         public CellSelectedEventArgs? CellSelectedEventArgs { get; set; }
         
-        public GridOverlayForm()
+        public GridOverlayForm(int gridRows, int gridCols)
         {
+            this.gridRows = gridRows;
+            this.gridCols = gridCols;
             InitializeComponent();
             InitializeGrid();
         }
@@ -29,19 +31,22 @@ namespace SansMus
             this.WindowState = FormWindowState.Normal;
             this.TopMost = true;
             this.ShowInTaskbar = false;
-            this.BackColor = Color.Black; // Solid black background
+            this.BackColor = Color.Black; // Solid black backgroundzq
             this.Opacity = 0.7; // Make form 70% opaque (30% transparent)
             this.KeyPreview = true;
             this.DoubleBuffered = true;
             
-            // Get primary screen bounds
-            Rectangle screenBounds = Screen.PrimaryScreen?.Bounds ?? Screen.AllScreens[0].Bounds;
+            // Get the screen that contains the cursor
+            Point cursorPos = Cursor.Position;
+            Screen? cursorScreen = Screen.FromPoint(cursorPos);
+            Rectangle screenBounds = cursorScreen?.Bounds ?? Screen.PrimaryScreen?.Bounds ?? Screen.AllScreens[0].Bounds;
+            
             this.Location = new Point(screenBounds.Left, screenBounds.Top);
             this.Size = new Size(screenBounds.Width, screenBounds.Height);
             
-            // Calculate cell dimensions
-            cellWidth = screenBounds.Width / GRID_COLS;
-            cellHeight = screenBounds.Height / GRID_ROWS;
+            // Calculate cell dimensions dynamically based on grid size
+            cellWidth = screenBounds.Width / gridCols;
+            cellHeight = screenBounds.Height / gridRows;
             
             this.Paint += GridOverlayForm_Paint;
             this.KeyDown += GridOverlayForm_KeyDown;
@@ -52,10 +57,6 @@ namespace SansMus
         {
             // Initialize letter mapping with grouping
             // Group cells with same first letter together in rectangular regions
-            // With 240 cells and 26 letters (A-Z), each group gets ~9 cells
-            // Arrange first letters in a pattern: roughly 5 columns × 6 rows = 30 regions (using 26)
-            
-            const int TOTAL_CELLS = GRID_ROWS * GRID_COLS; // 240
             const int LETTERS_COUNT = 26;
             
             // Organize first letters in roughly rectangular regions
@@ -63,16 +64,14 @@ namespace SansMus
             const int FIRST_LETTER_COLS = 5;
             const int FIRST_LETTER_ROWS = (LETTERS_COUNT + FIRST_LETTER_COLS - 1) / FIRST_LETTER_COLS; // 6
             
-            int cellIndex = 0;
-            
-            for (int row = 0; row < GRID_ROWS; row++)
+            for (int row = 0; row < gridRows; row++)
             {
-                for (int col = 0; col < GRID_COLS; col++)
+                for (int col = 0; col < gridCols; col++)
                 {
                     // Calculate which first letter region this cell belongs to
                     // Map grid position to first letter region
-                    int firstLetterCol = (col * FIRST_LETTER_COLS) / GRID_COLS;
-                    int firstLetterRow = (row * FIRST_LETTER_ROWS) / GRID_ROWS;
+                    int firstLetterCol = (col * FIRST_LETTER_COLS) / gridCols;
+                    int firstLetterRow = (row * FIRST_LETTER_ROWS) / gridRows;
                     int firstLetterIndex = firstLetterRow * FIRST_LETTER_COLS + firstLetterCol;
                     
                     if (firstLetterIndex >= LETTERS_COUNT)
@@ -88,12 +87,12 @@ namespace SansMus
                     for (int r = 0; r <= row; r++)
                     {
                         int startCol = (r == row) ? 0 : 0;
-                        int endCol = (r == row) ? col : GRID_COLS;
+                        int endCol = (r == row) ? col : gridCols;
                         
                         for (int c = startCol; c < endCol; c++)
                         {
-                            int prevFirstLetterCol = (c * FIRST_LETTER_COLS) / GRID_COLS;
-                            int prevFirstLetterRow = (r * FIRST_LETTER_ROWS) / GRID_ROWS;
+                            int prevFirstLetterCol = (c * FIRST_LETTER_COLS) / gridCols;
+                            int prevFirstLetterRow = (r * FIRST_LETTER_ROWS) / gridRows;
                             int prevFirstLetterIndex = prevFirstLetterRow * FIRST_LETTER_COLS + prevFirstLetterCol;
                             if (prevFirstLetterIndex >= LETTERS_COUNT) prevFirstLetterIndex = LETTERS_COUNT - 1;
                             
@@ -108,8 +107,6 @@ namespace SansMus
                     
                     string label = $"{firstLetter}{secondLetter}";
                     cellLabels[(row, col)] = label;
-                    
-                    cellIndex++;
                 }
             }
         }
@@ -124,14 +121,14 @@ namespace SansMus
             Pen gridPen = new Pen(Color.White, 1);
             
             // Vertical lines
-            for (int col = 0; col <= GRID_COLS; col++)
+            for (int col = 0; col <= gridCols; col++)
             {
                 int x = col * cellWidth;
                 g.DrawLine(gridPen, x, 0, x, this.Height);
             }
             
             // Horizontal lines
-            for (int row = 0; row <= GRID_ROWS; row++)
+            for (int row = 0; row <= gridRows; row++)
             {
                 int y = row * cellHeight;
                 g.DrawLine(gridPen, 0, y, this.Width, y);

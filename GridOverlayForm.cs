@@ -13,8 +13,15 @@ namespace SansMus
         
         private string? firstLetter = null;
         private Dictionary<(int row, int col), string> cellLabels = new Dictionary<(int row, int col), string>();
-        private int cellWidth;
-        private int cellHeight;
+        
+        // Variable cell size fields
+        private int baseCellWidth;
+        private int baseCellHeight;
+        private int firstColWidth;
+        private int lastColWidth;
+        private int firstRowHeight;
+        private int lastRowHeight;
+        
         public CellSelectedEventArgs? CellSelectedEventArgs { get; set; }
         
         public GridOverlayForm(int gridRows, int gridCols)
@@ -31,7 +38,7 @@ namespace SansMus
             this.WindowState = FormWindowState.Normal;
             this.TopMost = true;
             this.ShowInTaskbar = false;
-            this.BackColor = Color.Black; // Solid black backgroundzq
+            this.BackColor = Color.Black; // Solid black background
             this.Opacity = 0.7; // Make form 70% opaque (30% transparent)
             this.KeyPreview = true;
             this.DoubleBuffered = true;
@@ -44,9 +51,19 @@ namespace SansMus
             this.Location = new Point(screenBounds.Left, screenBounds.Top);
             this.Size = new Size(screenBounds.Width, screenBounds.Height);
             
-            // Calculate cell dimensions dynamically based on grid size
-            cellWidth = screenBounds.Width / gridCols;
-            cellHeight = screenBounds.Height / gridRows;
+            // Calculate base cell dimensions for internal cells
+            baseCellWidth = screenBounds.Width / gridCols;
+            baseCellHeight = screenBounds.Height / gridRows;
+            
+            // Calculate remainder pixels
+            int widthRemainder = screenBounds.Width % gridCols;
+            int heightRemainder = screenBounds.Height % gridRows;
+            
+            // Calculate edge cell sizes to absorb remainder pixels
+            firstColWidth = baseCellWidth + (widthRemainder / 2);
+            lastColWidth = baseCellWidth + (widthRemainder - widthRemainder / 2);
+            firstRowHeight = baseCellHeight + (heightRemainder / 2);
+            lastRowHeight = baseCellHeight + (heightRemainder - heightRemainder / 2);
             
             this.Paint += GridOverlayForm_Paint;
             this.KeyDown += GridOverlayForm_KeyDown;
@@ -111,6 +128,40 @@ namespace SansMus
             }
         }
         
+        private int GetCellWidth(int col)
+        {
+            if (col == 0) return firstColWidth;
+            if (col == gridCols - 1) return lastColWidth;
+            return baseCellWidth;
+        }
+        
+        private int GetCellHeight(int row)
+        {
+            if (row == 0) return firstRowHeight;
+            if (row == gridRows - 1) return lastRowHeight;
+            return baseCellHeight;
+        }
+        
+        private int GetCellX(int col)
+        {
+            int x = 0;
+            for (int c = 0; c < col; c++)
+            {
+                x += GetCellWidth(c);
+            }
+            return x;
+        }
+        
+        private int GetCellY(int row)
+        {
+            int y = 0;
+            for (int r = 0; r < row; r++)
+            {
+                y += GetCellHeight(r);
+            }
+            return y;
+        }
+        
         private void GridOverlayForm_Paint(object? sender, PaintEventArgs e)
         {
             Graphics g = e.Graphics;
@@ -123,14 +174,14 @@ namespace SansMus
             // Vertical lines
             for (int col = 0; col <= gridCols; col++)
             {
-                int x = col * cellWidth;
+                int x = GetCellX(col);
                 g.DrawLine(gridPen, x, 0, x, this.Height);
             }
             
             // Horizontal lines
             for (int row = 0; row <= gridRows; row++)
             {
-                int y = row * cellHeight;
+                int y = GetCellY(row);
                 g.DrawLine(gridPen, 0, y, this.Width, y);
             }
             
@@ -157,10 +208,10 @@ namespace SansMus
                 }
                 
                 Rectangle cellRect = new Rectangle(
-                    col * cellWidth,
-                    row * cellHeight,
-                    cellWidth,
-                    cellHeight
+                    GetCellX(col),
+                    GetCellY(row),
+                    GetCellWidth(col),
+                    GetCellHeight(row)
                 );
                 
                 g.DrawString(label, labelFont, textBrush, cellRect, format);
@@ -202,9 +253,14 @@ namespace SansMus
                     
                     if (cell.Key != default)
                     {
-                        // Calculate cell center
-                        int centerX = (cell.Key.col * cellWidth) + (cellWidth / 2);
-                        int centerY = (cell.Key.row * cellHeight) + (cellHeight / 2);
+                        // Calculate cell center using variable cell sizes
+                        int cellX = GetCellX(cell.Key.col);
+                        int cellY = GetCellY(cell.Key.row);
+                        int cellW = GetCellWidth(cell.Key.col);
+                        int cellH = GetCellHeight(cell.Key.row);
+                        
+                        int centerX = cellX + (cellW / 2);
+                        int centerY = cellY + (cellH / 2);
                         
                         // Add screen offset (in case of multi-monitor setup)
                         Point screenLocation = this.Location;

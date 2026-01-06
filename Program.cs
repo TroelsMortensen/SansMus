@@ -230,7 +230,8 @@ namespace SansMus
         {
             try
             {
-                // Only handle configured hotkey when overlay is not visible
+                // Only handle configured hotkey when overlay is NOT visible
+                // When overlay is visible, it will handle the hotkey itself to close
                 if (configuredHotkey != null && e.KeyCode == configuredHotkey && (overlayForm == null || overlayForm.IsDisposed))
                 {
                     if (this.InvokeRequired)
@@ -279,7 +280,7 @@ namespace SansMus
                 // Get monitor config for the current cursor position
                 MonitorConfig monitorConfig = GetMonitorConfigForCursor();
                 
-                overlayForm = new GridOverlayForm(monitorConfig.Rows, monitorConfig.Columns, gridOpacity, gridBackgroundOpacity);
+                overlayForm = new GridOverlayForm(monitorConfig.Rows, monitorConfig.Columns, gridOpacity, gridBackgroundOpacity, configuredHotkey.Value);
                 overlayForm.CellSelected += OverlayForm_CellSelected;
                 
                 DialogResult result = overlayForm.ShowDialog(this);

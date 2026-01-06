@@ -1,7 +1,5 @@
-- rename project and namespaces
 - backspace instead of escape when moving back a letter cell
 - clearer transparency for overlay form
-- remap activation to some function key, like F13, check vial first.
 - configuration file:  
   - grid options
   - mouse movement options

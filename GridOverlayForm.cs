@@ -63,6 +63,9 @@ namespace SansMus
         private readonly int gridCols;
         private readonly double gridOpacity;
         private readonly double gridBackgroundOpacity;
+        private readonly Keys? toggleHotkey;
+        private readonly DateTime creationTime;
+        private static readonly TimeSpan ignoreHotkeyDuration = TimeSpan.FromMilliseconds(500); // 1 second delay for testing
         
         private string? firstLetter = null;
         private Dictionary<(int row, int col), string> cellLabels = new Dictionary<(int row, int col), string>();
@@ -77,12 +80,14 @@ namespace SansMus
         
         public CellSelectedEventArgs? CellSelectedEventArgs { get; set; }
         
-        public GridOverlayForm(int gridRows, int gridCols, double gridOpacity, double gridBackgroundOpacity)
+        public GridOverlayForm(int gridRows, int gridCols, double gridOpacity, double gridBackgroundOpacity, Keys? toggleHotkey = null)
         {
             this.gridRows = gridRows;
             this.gridCols = gridCols;
             this.gridOpacity = gridOpacity;
             this.gridBackgroundOpacity = gridBackgroundOpacity;
+            this.toggleHotkey = toggleHotkey;
+            this.creationTime = DateTime.Now;
             InitializeComponent();
             InitializeGrid();
         }
@@ -343,6 +348,41 @@ namespace SansMus
         
         private void GridOverlayForm_KeyDown(object? sender, KeyEventArgs e)
         {
+            // Check if toggle hotkey is pressed (to close the overlay)
+            if (toggleHotkey != null && e.KeyCode == toggleHotkey)
+            {
+                // Ignore hotkey if overlay was just created (prevents immediate close from same keypress)
+                if (DateTime.Now - creationTime < ignoreHotkeyDuration)
+                {
+                    e.Handled = true;
+                    return;
+                }
+                
+                this.DialogResult = DialogResult.Cancel;
+                this.Close();
+                e.Handled = true;
+                return;
+            }
+            
+            // Check if Escape is pressed (to close the overlay)
+            if (e.KeyCode == Keys.Escape)
+            {
+                if (firstLetter != null)
+                {
+                    // Cancel hint mode, return to full grid
+                    firstLetter = null;
+                    UpdateLayeredWindowBitmap();
+                }
+                else
+                {
+                    // Close the overlay
+                    this.DialogResult = DialogResult.Cancel;
+                    this.Close();
+                }
+                e.Handled = true;
+                return;
+            }
+            
             if (firstLetter == null)
             {
                 // First letter
@@ -351,12 +391,6 @@ namespace SansMus
                     firstLetter = e.KeyCode.ToString().ToUpper();
                     UpdateLayeredWindowBitmap(); // Redraw to show filtered cells
                     e.Handled = true;
-                }
-                else if (e.KeyCode == Keys.Escape)
-                {
-                    // Cancel grid
-                    this.DialogResult = DialogResult.Cancel;
-                    this.Close();
                 }
             }
             else
@@ -394,13 +428,6 @@ namespace SansMus
                         this.Close();
                     }
                     
-                    e.Handled = true;
-                }
-                else if (e.KeyCode == Keys.Escape)
-                {
-                    // Cancel hint mode, return to full grid
-                    firstLetter = null;
-                    UpdateLayeredWindowBitmap();
                     e.Handled = true;
                 }
             }

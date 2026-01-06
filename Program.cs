@@ -34,6 +34,11 @@ namespace SansMus
         private double accumulatedMoveX = 0.0;
         private double accumulatedMoveY = 0.0;
         
+        // Movement acceleration
+        private DateTime? movementStartTime = null; // Timestamp when current movement started (null when not moving)
+        private const double ACCELERATION_DURATION_MS = 250.0; // Time to reach full speed (250ms)
+        private const double INITIAL_SPEED_FACTOR = 0.10; // Starting speed as fraction of target speed (10%)
+        
         // Orbital mouse configuration
         private const double ROTATION_POINT_DISTANCE = 25.0; // Distance behind cursor for rotation point (in pixels)
         private bool useOrbitalMouse = false;
@@ -585,6 +590,11 @@ namespace SansMus
                         {
                             if (!heldDirectionKeys.Contains(e.KeyCode))
                             {
+                                // Track movement start if this is the first key pressed
+                                if (heldDirectionKeys.Count == 0 && heldTurnKeys.Count == 0)
+                                {
+                                    movementStartTime = DateTime.Now;
+                                }
                                 heldDirectionKeys.Add(e.KeyCode);
                                 StartMovementTimer();
                             }
@@ -596,6 +606,11 @@ namespace SansMus
                         {
                             if (!heldTurnKeys.Contains(e.KeyCode))
                             {
+                                // Track movement start if this is the first key pressed (and no directional keys)
+                                if (heldDirectionKeys.Count == 0 && heldTurnKeys.Count == 0)
+                                {
+                                    movementStartTime = DateTime.Now;
+                                }
                                 heldTurnKeys.Add(e.KeyCode);
                                 StartMovementTimer();
                             }
@@ -612,6 +627,11 @@ namespace SansMus
                         {
                             if (!heldDirectionKeys.Contains(e.KeyCode))
                             {
+                                // Track movement start if this is the first key pressed
+                                if (heldDirectionKeys.Count == 0)
+                                {
+                                    movementStartTime = DateTime.Now;
+                                }
                                 heldDirectionKeys.Add(e.KeyCode);
                                 StartMovementTimer();
                             }
@@ -652,6 +672,8 @@ namespace SansMus
                     if (heldDirectionKeys.Count == 0 && heldTurnKeys.Count == 0)
                     {
                         StopMovementTimer();
+                        // Reset acceleration when all movement keys are released
+                        movementStartTime = null;
                     }
                     e.Handled = true;
                 }
@@ -663,6 +685,8 @@ namespace SansMus
                     if (heldDirectionKeys.Count == 0 && heldTurnKeys.Count == 0)
                     {
                         StopMovementTimer();
+                        // Reset acceleration when all movement keys are released
+                        movementStartTime = null;
                     }
                     e.Handled = true;
                 }
@@ -975,6 +999,8 @@ namespace SansMus
         
         private double GetCurrentSpeed()
         {
+            double baseSpeed;
+            
             // If any speed modifier keys are held, use the highest speed from those modifiers
             if (heldSpeedModifierKeys.Count > 0)
             {
@@ -989,11 +1015,32 @@ namespace SansMus
                         }
                     }
                 }
-                return maxSpeed;
+                baseSpeed = maxSpeed;
+            }
+            else
+            {
+                // Otherwise, use default speed
+                baseSpeed = defaultSpeedPixelsPerSecond;
             }
             
-            // Otherwise, use default speed
-            return defaultSpeedPixelsPerSecond;
+            // Apply acceleration if movement has started
+            if (movementStartTime != null)
+            {
+                // Calculate elapsed time since movement started
+                double elapsedMs = (DateTime.Now - movementStartTime.Value).TotalMilliseconds;
+                
+                // Clamp elapsed time to acceleration duration
+                elapsedMs = Math.Min(elapsedMs, ACCELERATION_DURATION_MS);
+                
+                // Calculate acceleration factor: linear interpolation from INITIAL_SPEED_FACTOR to 1.0
+                double accelerationFactor = INITIAL_SPEED_FACTOR + (1.0 - INITIAL_SPEED_FACTOR) * (elapsedMs / ACCELERATION_DURATION_MS);
+                
+                // Apply acceleration to base speed
+                return baseSpeed * accelerationFactor;
+            }
+            
+            // No acceleration (should not happen during active movement, but return base speed as fallback)
+            return baseSpeed;
         }
         
         private void StartMovementTimer()

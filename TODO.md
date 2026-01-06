@@ -6,3 +6,4 @@
 
 Kig senere på at bevæge mus. 
 
+eventually multi monitor support. 

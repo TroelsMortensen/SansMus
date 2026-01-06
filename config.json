@@ -1,12 +1,12 @@
 {
   "WarpGrid": {
-    "hotkey": "F13",
-    "gridOpacity": 1.0,
-    "monitors": [
+    "Hotkey": "F13",
+    "GridOpacity": 1.0,
+    "Monitors": [
       {
-        "numOfRows": 7,
-        "numOfColumns": 18,
-        "cellShortcuts": [
+        "NumOfRows": 7,
+        "NumOfColumns": 18,
+        "CellShortcuts": [
           "qq", "qw", "ww", "we", "ee", "er", "rr", "rt", "tt", "yy", "uy", "uu", "iu", "ii", "oi", "oo", "po", "pp",
           "qa", "qs", "ws", "wd", "ed", "ef", "rf", "rg", "tg", "yh", "uh", "uj", "ij", "ik", "ok", "ol", "pl", "pæ",
           "aq", "aw", "sw", "se", "de", "dr", "fr", "ft", "gt", "hy", "jy", "ju", "ku", "ki", "li", "lo", "æo", "æp",
@@ -17,9 +17,9 @@
         ]
       },
       {
-        "numOfRows": 4,
-        "numOfColumns": 7,
-        "cellShortcuts": [
+        "NumOfRows": 4,
+        "NumOfColumns": 7,
+        "CellShortcuts": [
           "er", "rr", "rt", "tt", "yy", "uy", "uu",
           "dr", "fr", "ft", "gt", "hy", "jy", "ju",
           "df", "ff", "fg", "gg", "hh", "jh", "jj",
@@ -29,9 +29,9 @@
     ]
   },
   "MouseMovement": {
-    "enabled": false,
-    "movementSpeed": 1.0,
-    "acceleration": 1.0,
-    "scrollSpeed": 1.0
+    "Enabled": false,
+    "MovementSpeed": 1.0,
+    "Acceleration": 1.0,
+    "ScrollSpeed": 1.0
   }
 }

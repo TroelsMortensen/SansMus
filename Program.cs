@@ -124,9 +124,9 @@ namespace SansMus
                     throw new InvalidOperationException("Configuration file missing 'WarpGrid' section.");
                 }
                 
-                if (!warpGrid.TryGetProperty("hotkey", out var hotkeyProp))
+                if (!warpGrid.TryGetProperty("Hotkey", out var hotkeyProp))
                 {
-                    throw new InvalidOperationException("Configuration file missing 'hotkey' in WarpGrid section.");
+                    throw new InvalidOperationException("Configuration file missing 'Hotkey' in WarpGrid section.");
                 }
                 
                 string? hotkeyStr = hotkeyProp.GetString();
@@ -142,45 +142,45 @@ namespace SansMus
                 }
                 
                 // Load opacity settings
-                if (warpGrid.TryGetProperty("gridOpacity", out var gridOpacityProp))
+                if (warpGrid.TryGetProperty("GridOpacity", out var gridOpacityProp))
                 {
                     if (gridOpacityProp.ValueKind == JsonValueKind.Number)
                     {
                         gridOpacity = gridOpacityProp.GetDouble();
                         if (gridOpacity < 0.0 || gridOpacity > 1.0)
                         {
-                            throw new InvalidOperationException($"gridOpacity must be between 0.0 and 1.0, got {gridOpacity}.");
+                            throw new InvalidOperationException($"GridOpacity must be between 0.0 and 1.0, got {gridOpacity}.");
                         }
                     }
                 }
                 
                 // Load monitor configurations
-                if (!warpGrid.TryGetProperty("monitors", out var monitorsProp))
+                if (!warpGrid.TryGetProperty("Monitors", out var monitorsProp))
                 {
-                    throw new InvalidOperationException("Configuration file missing 'monitors' array in WarpGrid section.");
+                    throw new InvalidOperationException("Configuration file missing 'Monitors' array in WarpGrid section.");
                 }
                 
                 if (monitorsProp.ValueKind != JsonValueKind.Array)
                 {
-                    throw new InvalidOperationException("'monitors' must be an array.");
+                    throw new InvalidOperationException("'Monitors' must be an array.");
                 }
                 
                 if (monitorsProp.GetArrayLength() == 0)
                 {
-                    throw new InvalidOperationException("'monitors' array must contain at least one monitor configuration.");
+                    throw new InvalidOperationException("'Monitors' array must contain at least one monitor configuration.");
                 }
                 
                 monitorConfigs = new List<MonitorConfig>();
                 foreach (var monitorElement in monitorsProp.EnumerateArray())
                 {
-                    if (!monitorElement.TryGetProperty("numOfRows", out var rowsProp))
+                    if (!monitorElement.TryGetProperty("NumOfRows", out var rowsProp))
                     {
-                        throw new InvalidOperationException("Monitor configuration missing 'numOfRows'.");
+                        throw new InvalidOperationException("Monitor configuration missing 'NumOfRows'.");
                     }
                     
-                    if (!monitorElement.TryGetProperty("numOfColumns", out var colsProp))
+                    if (!monitorElement.TryGetProperty("NumOfColumns", out var colsProp))
                     {
-                        throw new InvalidOperationException("Monitor configuration missing 'numOfColumns'.");
+                        throw new InvalidOperationException("Monitor configuration missing 'NumOfColumns'.");
                     }
                     
                     int rows = rowsProp.GetInt32();
@@ -188,16 +188,16 @@ namespace SansMus
                     
                     if (rows <= 0)
                     {
-                        throw new InvalidOperationException($"Monitor configuration has invalid 'numOfRows': {rows}. Must be a positive integer.");
+                        throw new InvalidOperationException($"Monitor configuration has invalid 'NumOfRows': {rows}. Must be a positive integer.");
                     }
                     
                     if (cols <= 0)
                     {
-                        throw new InvalidOperationException($"Monitor configuration has invalid 'numOfColumns': {cols}. Must be a positive integer.");
+                        throw new InvalidOperationException($"Monitor configuration has invalid 'NumOfColumns': {cols}. Must be a positive integer.");
                     }
                     
                     List<string>? cellShortcuts = null;
-                    if (monitorElement.TryGetProperty("cellShortcuts", out var shortcutsProp) && shortcutsProp.ValueKind == JsonValueKind.Array)
+                    if (monitorElement.TryGetProperty("CellShortcuts", out var shortcutsProp) && shortcutsProp.ValueKind == JsonValueKind.Array)
                     {
                         cellShortcuts = new List<string>();
                         foreach (var shortcut in shortcutsProp.EnumerateArray())

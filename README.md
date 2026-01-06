@@ -31,6 +31,33 @@ SansMus enables you to control your mouse cursor using only keyboard input. It p
 - **Fast Cursor Teleportation**: Instantly move cursor to any cell center
 - **Config Reload**: Reload configuration without restarting the application
 
+Here is an example of the grid overlay as shown on your screen (cell labels may vary based on your config):
+
+```
++-----+-----+-----+-----+-----+-----+-----+
+| AA  | AB  | AC  | AD  | AE  | AF  | AG  |
++-----+-----+-----+-----+-----+-----+-----+
+| BA  | BB  | BC  | BD  | BE  | BF  | BG  |
++-----+-----+-----+-----+-----+-----+-----+
+| CA  | CB  | CC  | CD  | CE  | CF  | CG  |
++-----+-----+-----+-----+-----+-----+-----+
+| DA  | DB  | DC  | DD  | DE  | DF  | DG  |
++-----+-----+-----+-----+-----+-----+-----+
+| EA  | EB  | EC  | ED  | EE  | EF  | EG  |
++-----+-----+-----+-----+-----+-----+-----+
+| FA  | FB  | FC  | FD  | FE  | FF  | FG  |
++-----+-----+-----+-----+-----+-----+-----+
+| GA  | GB  | GC  | GD  | GE  | GF  | GG  |
++-----+-----+-----+-----+-----+-----+-----+
+```
+
+Type the two-character cell label (e.g. `CE`) to instantly warp the mouse cursor to that cell's center.
+
+- The grid size and labels are configurable in `config.json`.
+- Overlay appears full screen and supports multiple monitors.
+- Only grid lines and labels are visible; background is transparent.
+
+
 ### Keyboard Movement Mode
 - **Directional Movement**: Hold keys to continuously move cursor (Up/Down/Left/Right)
 - **Speed Modifiers**: Hold modifier keys to temporarily change movement speed

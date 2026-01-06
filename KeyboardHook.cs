@@ -22,6 +22,7 @@ namespace SansMus
         
         private LowLevelKeyboardProc _proc;
         private IntPtr _hookID = IntPtr.Zero;
+        private volatile bool _keyHandled = false; // Thread-safe flag to track if key was handled
         
         public event KeyEventHandler? KeyDown;
         public event KeyEventHandler? KeyUp;
@@ -50,6 +51,9 @@ namespace SansMus
             {
                 if (nCode >= 0)
                 {
+                    // Reset handled flag at start of each callback
+                    _keyHandled = false;
+                    
                     KBDLLHOOKSTRUCT kbStruct = (KBDLLHOOKSTRUCT)Marshal.PtrToStructure(lParam, typeof(KBDLLHOOKSTRUCT))!;
                     Keys key = (Keys)kbStruct.vkCode;
                     
@@ -58,10 +62,20 @@ namespace SansMus
                     if (wParam == (IntPtr)WM_KEYDOWN)
                     {
                         KeyDown?.Invoke(this, e);
+                        // If key was handled, consume the event to prevent propagation
+                        if (_keyHandled)
+                        {
+                            return (IntPtr)1; // Consume event - prevent propagation
+                        }
                     }
                     else if (wParam == (IntPtr)WM_KEYUP)
                     {
                         KeyUp?.Invoke(this, e);
+                        // If key was handled, consume the event to prevent propagation
+                        if (_keyHandled)
+                        {
+                            return (IntPtr)1; // Consume event - prevent propagation
+                        }
                     }
                 }
             }
@@ -87,6 +101,15 @@ namespace SansMus
         
         [DllImport("kernel32.dll", CharSet = CharSet.Auto, SetLastError = true)]
         private static extern IntPtr GetModuleHandle(string? lpModuleName);
+        
+        /// <summary>
+        /// Marks the current key event as handled, which will prevent it from propagating to other applications.
+        /// Call this method from KeyDown or KeyUp event handlers when a key is actually handled.
+        /// </summary>
+        public void MarkKeyHandled()
+        {
+            _keyHandled = true;
+        }
         
         public void Dispose()
         {

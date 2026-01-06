@@ -70,6 +70,7 @@ namespace SansMus
         private string? firstLetter = null;
         private Dictionary<(int row, int col), string> cellLabels = new Dictionary<(int row, int col), string>();
         private bool isClosing = false;
+        private GlobalKeyboardHook? keyboardHook = null; // Global keyboard hook for capturing input when overlay doesn't have focus
         
         // Variable cell size fields
         private int baseCellWidth;
@@ -154,6 +155,23 @@ namespace SansMus
             
             // Update the layered window with initial bitmap
             UpdateLayeredWindowBitmap();
+            
+            // Initialize global keyboard hook to capture input even when overlay doesn't have focus
+            InitializeOverlayKeyboardHook();
+        }
+        
+        private void InitializeOverlayKeyboardHook()
+        {
+            try
+            {
+                keyboardHook = new GlobalKeyboardHook();
+                keyboardHook.KeyDown += OverlayKeyboardHook_KeyDown;
+            }
+            catch (Exception)
+            {
+                // Silently handle exceptions - if hook fails, form events will still work when form has focus
+                keyboardHook = null;
+            }
         }
         
         private void InitializeGrid()
@@ -395,7 +413,51 @@ namespace SansMus
             UpdateLayeredWindowBitmap();
         }
         
-        private void GridOverlayForm_KeyDown(object? sender, KeyEventArgs e)
+        private void OverlayKeyboardHook_KeyDown(object? sender, KeyEventArgs e)
+        {
+            // Process key events from global hook (works even when overlay doesn't have focus)
+            // Extract key code to avoid thread marshaling issues
+            Keys keyCode = e.KeyCode;
+            
+            // Check if this is a key we might handle (mark as handled synchronously to prevent propagation)
+            bool mightHandle = false;
+            if (keyCode >= Keys.A && keyCode <= Keys.Z)
+            {
+                mightHandle = true;
+            }
+            else if (keyCode == Keys.Escape || keyCode == Keys.Back)
+            {
+                mightHandle = true;
+            }
+            else if (toggleHotkey != null && keyCode == toggleHotkey)
+            {
+                mightHandle = true;
+            }
+            
+            // If it's a key we might handle, mark it as handled immediately to prevent propagation
+            // We'll process it asynchronously, but we've already consumed the event
+            if (mightHandle && keyboardHook != null)
+            {
+                keyboardHook.MarkKeyHandled();
+            }
+            
+            // Use BeginInvoke to ensure UI updates happen on the UI thread
+            if (this.InvokeRequired)
+            {
+                this.BeginInvoke(new Action(() =>
+                {
+                    // Create new KeyEventArgs on UI thread
+                    KeyEventArgs uiKeyArgs = new KeyEventArgs(keyCode);
+                    ProcessKeyDown(uiKeyArgs);
+                }));
+            }
+            else
+            {
+                ProcessKeyDown(e);
+            }
+        }
+        
+        private void ProcessKeyDown(KeyEventArgs e)
         {
             // Check if toggle hotkey is pressed (to close the overlay)
             if (toggleHotkey != null && e.KeyCode == toggleHotkey)
@@ -410,6 +472,7 @@ namespace SansMus
                 this.DialogResult = DialogResult.Cancel;
                 this.Close();
                 e.Handled = true;
+                // Key already marked as handled in OverlayKeyboardHook_KeyDown
                 return;
             }
             
@@ -429,6 +492,7 @@ namespace SansMus
                     this.Close();
                 }
                 e.Handled = true;
+                // Key already marked as handled in OverlayKeyboardHook_KeyDown
                 return;
             }
             
@@ -440,6 +504,7 @@ namespace SansMus
                     firstLetter = e.KeyCode.ToString().ToUpper();
                     UpdateLayeredWindowBitmap(); // Redraw to show filtered cells
                     e.Handled = true;
+                    // Key already marked as handled in OverlayKeyboardHook_KeyDown
                 }
             }
             else
@@ -481,8 +546,15 @@ namespace SansMus
                     }
                     
                     e.Handled = true;
+                    // Key already marked as handled in OverlayKeyboardHook_KeyDown
                 }
             }
+        }
+        
+        private void GridOverlayForm_KeyDown(object? sender, KeyEventArgs e)
+        {
+            // Fallback handler when form has focus - use same processing logic
+            ProcessKeyDown(e);
         }
         
         private void GridOverlayForm_KeyPress(object? sender, KeyPressEventArgs e)
@@ -554,6 +626,14 @@ namespace SansMus
         {
             // Mark that we're closing to prevent Deactivate from interfering
             isClosing = true;
+            
+            // Dispose global keyboard hook
+            if (keyboardHook != null)
+            {
+                keyboardHook.Dispose();
+                keyboardHook = null;
+            }
+            
             // Allow all forms of closing - the form should always be closeable
             // ESC, toggle hotkey, Alt+F4, and programmatic close should all work
             // This prevents the form from getting stuck if keyboard input isn't working

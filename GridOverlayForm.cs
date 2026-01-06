@@ -62,7 +62,6 @@ namespace SansMus
         private readonly int gridRows;
         private readonly int gridCols;
         private readonly double gridOpacity;
-        private readonly double gridBackgroundOpacity;
         private readonly Keys? toggleHotkey;
         private readonly DateTime creationTime;
         private static readonly TimeSpan ignoreHotkeyDuration = TimeSpan.FromMilliseconds(500); // 1 second delay for testing
@@ -81,12 +80,11 @@ namespace SansMus
         
         public CellSelectedEventArgs? CellSelectedEventArgs { get; set; }
         
-        public GridOverlayForm(int gridRows, int gridCols, double gridOpacity, double gridBackgroundOpacity, Keys? toggleHotkey = null, Screen? targetScreen = null, List<string>? cellShortcuts = null)
+        public GridOverlayForm(int gridRows, int gridCols, double gridOpacity, Keys? toggleHotkey = null, Screen? targetScreen = null, List<string>? cellShortcuts = null)
         {
             this.gridRows = gridRows;
             this.gridCols = gridCols;
             this.gridOpacity = gridOpacity;
-            this.gridBackgroundOpacity = gridBackgroundOpacity;
             this.toggleHotkey = toggleHotkey;
             this.cellShortcuts = cellShortcuts;
             this.creationTime = DateTime.Now;

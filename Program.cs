@@ -17,7 +17,6 @@ namespace SansMus
         private Button? reloadButton;
         private List<MonitorConfig>? monitorConfigs = null;
         private double gridOpacity = 1.0; // Default: fully opaque grid
-        private double gridBackgroundOpacity = 0.7; // Default: 70% opaque background
         private string? duplicateWarning = null;
         
         public MainForm()
@@ -150,18 +149,6 @@ namespace SansMus
                         if (gridOpacity < 0.0 || gridOpacity > 1.0)
                         {
                             throw new InvalidOperationException($"gridOpacity must be between 0.0 and 1.0, got {gridOpacity}.");
-                        }
-                    }
-                }
-                
-                if (warpGrid.TryGetProperty("gridBackgroundOpacity", out var gridBackgroundOpacityProp))
-                {
-                    if (gridBackgroundOpacityProp.ValueKind == JsonValueKind.Number)
-                    {
-                        gridBackgroundOpacity = gridBackgroundOpacityProp.GetDouble();
-                        if (gridBackgroundOpacity < 0.0 || gridBackgroundOpacity > 1.0)
-                        {
-                            throw new InvalidOperationException($"gridBackgroundOpacity must be between 0.0 and 1.0, got {gridBackgroundOpacity}.");
                         }
                     }
                 }
@@ -431,7 +418,7 @@ namespace SansMus
                 Point cursorPos = Cursor.Position;
                 Screen? cursorScreen = Screen.FromPoint(cursorPos);
                 
-                overlayForm = new GridOverlayForm(monitorConfig.Rows, monitorConfig.Columns, gridOpacity, gridBackgroundOpacity, configuredHotkey.Value, cursorScreen, monitorConfig.CellShortcuts);
+                overlayForm = new GridOverlayForm(monitorConfig.Rows, monitorConfig.Columns, gridOpacity, configuredHotkey.Value, cursorScreen, monitorConfig.CellShortcuts);
                 overlayForm.CellSelected += OverlayForm_CellSelected;
                 
                 // Use null as parent to prevent parent form from affecting positioning
@@ -516,7 +503,6 @@ namespace SansMus
             configuredHotkey = null;
             monitorConfigs = null;
             gridOpacity = 1.0;
-            gridBackgroundOpacity = 0.7;
             
             // Dispose existing keyboard hook
             if (keyboardHook != null)

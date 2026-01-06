@@ -277,8 +277,10 @@ namespace SansMus
                     // Draw cell labels with opacity based on gridOpacity
                     int textAlpha = (int)(gridOpacity * 255);
                     Color textColor = Color.FromArgb(textAlpha, Color.White);
+                    Color outlineColor = Color.FromArgb(textAlpha, Color.Black);
                     using (Font labelFont = new Font("Arial", 14, FontStyle.Bold))
                     using (Brush textBrush = new SolidBrush(textColor))
+                    using (Brush outlineBrush = new SolidBrush(outlineColor))
                     using (StringFormat format = new StringFormat
                     {
                         Alignment = StringAlignment.Center,
@@ -303,6 +305,23 @@ namespace SansMus
                                 GetCellHeight(row)
                             );
                             
+                            // Draw black outline by drawing text multiple times with offsets
+                            for (int offsetX = -1; offsetX <= 1; offsetX++)
+                            {
+                                for (int offsetY = -1; offsetY <= 1; offsetY++)
+                                {
+                                    if (offsetX == 0 && offsetY == 0) continue; // Skip center, will draw white text there
+                                    Rectangle outlineRect = new Rectangle(
+                                        cellRect.X + offsetX,
+                                        cellRect.Y + offsetY,
+                                        cellRect.Width,
+                                        cellRect.Height
+                                    );
+                                    g.DrawString(label, labelFont, outlineBrush, outlineRect, format);
+                                }
+                            }
+                            
+                            // Draw white text on top
                             g.DrawString(label, labelFont, textBrush, cellRect, format);
                         }
                     }

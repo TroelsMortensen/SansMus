@@ -264,9 +264,47 @@ namespace SansMus
                         }
                         else
                         {
-                            // Validate and fix duplicates
-                            cellShortcuts = ValidateAndFixDuplicates(cellShortcuts, rows, cols, monitorConfigs.Count);
+                            // Validate that all shortcuts have the same length (1-3 characters)
+                            int? shortcutLength = null;
+                            bool allSameLength = true;
+                            foreach (string shortcut in cellShortcuts)
+                            {
+                                if (shortcut.Length < 1 || shortcut.Length > 3)
+                                {
+                                    // Invalid length, use fallback
+                                    allSameLength = false;
+                                    break;
+                                }
+                                
+                                if (shortcutLength == null)
+                                {
+                                    shortcutLength = shortcut.Length;
+                                }
+                                else if (shortcut.Length != shortcutLength.Value)
+                                {
+                                    // Different lengths found, use fallback
+                                    allSameLength = false;
+                                    break;
+                                }
+                            }
+                            
+                            if (!allSameLength || shortcutLength == null)
+                            {
+                                // Invalid shortcuts, use fallback generation
+                                cellShortcuts = null;
+                            }
+                            else
+                            {
+                                // Validate and fix duplicates
+                                cellShortcuts = ValidateAndFixDuplicates(cellShortcuts, rows, cols, monitorConfigs.Count, shortcutLength.Value);
+                            }
                         }
+                    }
+                    
+                    // If cellShortcuts is null, generate them automatically
+                    if (cellShortcuts == null)
+                    {
+                        cellShortcuts = GenerateCellShortcuts(rows, cols);
                     }
                     
                     monitorConfigs.Add(new MonitorConfig
@@ -450,7 +488,60 @@ namespace SansMus
             }
         }
         
-        private List<string> ValidateAndFixDuplicates(List<string> cellShortcuts, int rows, int cols, int monitorIndex)
+        private int CalculateRequiredShortcutLength(int totalCells)
+        {
+            if (totalCells <= 26) return 1;
+            if (totalCells <= 676) return 2;  // 26^2
+            return 3;  // 26^3 = 17,576
+        }
+        
+        private List<string> GenerateCellShortcuts(int rows, int cols)
+        {
+            int totalCells = rows * cols;
+            int shortcutLength = CalculateRequiredShortcutLength(totalCells);
+            List<string> shortcuts = new List<string>();
+            
+            // Generate sequential shortcuts based on length
+            if (shortcutLength == 1)
+            {
+                // Single letters: A, B, C, ..., Z
+                for (int i = 0; i < totalCells && i < 26; i++)
+                {
+                    shortcuts.Add(((char)('A' + i)).ToString());
+                }
+                // If more than 26 cells, wrap around (shouldn't happen with 1-letter, but handle gracefully)
+                for (int i = 26; i < totalCells; i++)
+                {
+                    shortcuts.Add(((char)('A' + (i % 26))).ToString());
+                }
+            }
+            else if (shortcutLength == 2)
+            {
+                // Two letters: AA, AB, AC, ..., AZ, BA, BB, ..., ZZ
+                for (int i = 0; i < totalCells; i++)
+                {
+                    int first = i / 26;
+                    int second = i % 26;
+                    shortcuts.Add($"{(char)('A' + first)}{(char)('A' + second)}");
+                }
+            }
+            else // shortcutLength == 3
+            {
+                // Three letters: AAA, AAB, AAC, ..., ZZZ
+                for (int i = 0; i < totalCells; i++)
+                {
+                    int first = i / (26 * 26);
+                    int remainder = i % (26 * 26);
+                    int second = remainder / 26;
+                    int third = remainder % 26;
+                    shortcuts.Add($"{(char)('A' + first)}{(char)('A' + second)}{(char)('A' + third)}");
+                }
+            }
+            
+            return shortcuts;
+        }
+        
+        private List<string> ValidateAndFixDuplicates(List<string> cellShortcuts, int rows, int cols, int monitorIndex, int shortcutLength)
         {
             // Create a dictionary to track which indices contain each shortcut
             Dictionary<string, List<int>> shortcutIndices = new Dictionary<string, List<int>>(StringComparer.OrdinalIgnoreCase);
@@ -478,16 +569,51 @@ namespace SansMus
                 }
             }
             
-            // Generate sequential unused combinations
+            // Generate sequential unused combinations based on shortcut length
             List<string> replacementList = new List<string>();
-            for (char first = 'A'; first <= 'Z'; first++)
+            
+            if (shortcutLength == 1)
             {
-                for (char second = 'A'; second <= 'Z'; second++)
+                // Single letters: A-Z
+                for (char c = 'A'; c <= 'Z'; c++)
                 {
-                    string combo = $"{first}{second}";
+                    string combo = c.ToString();
                     if (!usedShortcuts.Contains(combo))
                     {
                         replacementList.Add(combo);
+                    }
+                }
+            }
+            else if (shortcutLength == 2)
+            {
+                // Two letters: AA-ZZ
+                for (char first = 'A'; first <= 'Z'; first++)
+                {
+                    for (char second = 'A'; second <= 'Z'; second++)
+                    {
+                        string combo = $"{first}{second}";
+                        if (!usedShortcuts.Contains(combo))
+                        {
+                            replacementList.Add(combo);
+                        }
+                    }
+                }
+            }
+            else // shortcutLength == 3
+            {
+                // Three letters: AAA-ZZZ
+                for (char first = 'A'; first <= 'Z'; first++)
+                {
+                    for (char second = 'A'; second <= 'Z'; second++)
+                    {
+                        for (char third = 'A'; third <= 'Z'; third++)
+                        {
+                            string combo = $"{first}{second}{third}";
+                            if (!usedShortcuts.Contains(combo))
+                            {
+                                replacementList.Add(combo);
+                            }
+                        }
                     }
                 }
             }
@@ -521,11 +647,15 @@ namespace SansMus
                         
                         if (replacement == null)
                         {
-                            // Fallback: generate a unique replacement using numbers
+                            // Fallback: generate a unique replacement
+                            // For 1-letter: use numbers (A1, A2, ...)
+                            // For 2-letter: use numbers (AA1, AA2, ...)
+                            // For 3-letter: use numbers (AAA1, AAA2, ...)
                             int fallbackNum = 1;
+                            string prefix = shortcutLength == 1 ? "A" : (shortcutLength == 2 ? "AA" : "AAA");
                             do
                             {
-                                replacement = $"AA{fallbackNum++}";
+                                replacement = $"{prefix}{fallbackNum++}";
                             } while (allUsedShortcuts.Contains(replacement));
                         }
                         

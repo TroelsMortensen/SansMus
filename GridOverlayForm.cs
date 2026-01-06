@@ -80,8 +80,9 @@ namespace SansMus
         private readonly DateTime creationTime;
         private static readonly TimeSpan ignoreHotkeyDuration = TimeSpan.FromMilliseconds(500); // 1 second delay for testing
         private readonly List<string>? cellShortcuts;
+        private readonly int shortcutLength;
         
-        private string? firstLetter = null;
+        private string typedChars = "";
         private Dictionary<(int row, int col), string> cellLabels = new Dictionary<(int row, int col), string>();
         private bool isClosing = false;
         private GlobalKeyboardHook? keyboardHook = null; // Global keyboard hook for capturing input when overlay doesn't have focus
@@ -104,6 +105,24 @@ namespace SansMus
             this.toggleHotkey = toggleHotkey;
             this.cellShortcuts = cellShortcuts;
             this.creationTime = DateTime.Now;
+            
+            // Detect shortcut length from cellShortcuts, or calculate based on cell count
+            if (cellShortcuts != null && cellShortcuts.Count > 0)
+            {
+                this.shortcutLength = cellShortcuts[0].Length;
+            }
+            else
+            {
+                // Calculate required length based on total cell count
+                int totalCells = gridRows * gridCols;
+                if (totalCells <= 26)
+                    this.shortcutLength = 1;
+                else if (totalCells <= 676)
+                    this.shortcutLength = 2;
+                else
+                    this.shortcutLength = 3;
+            }
+            
             InitializeComponent(targetScreen);
             InitializeGrid();
         }
@@ -245,58 +264,45 @@ namespace SansMus
             }
             else
             {
-                // Fall back to hardcoded generation for backward compatibility
-                // Initialize letter mapping with grouping
-                // Group cells with same first letter together in rectangular regions
-                const int LETTERS_COUNT = 26;
+                // Fall back to auto-generation based on shortcutLength
+                int totalCells = gridRows * gridCols;
                 
-                // Organize first letters in roughly rectangular regions
-                // Use 5 columns of first letters (5 cols × 6 rows = 30, but we only use 26)
-                const int FIRST_LETTER_COLS = 5;
-                const int FIRST_LETTER_ROWS = (LETTERS_COUNT + FIRST_LETTER_COLS - 1) / FIRST_LETTER_COLS; // 6
-                
-                for (int row = 0; row < gridRows; row++)
+                if (shortcutLength == 1)
                 {
-                    for (int col = 0; col < gridCols; col++)
+                    // Single letters: A, B, C, ..., Z
+                    for (int i = 0; i < totalCells; i++)
                     {
-                        // Calculate which first letter region this cell belongs to
-                        // Map grid position to first letter region
-                        int firstLetterCol = (col * FIRST_LETTER_COLS) / gridCols;
-                        int firstLetterRow = (row * FIRST_LETTER_ROWS) / gridRows;
-                        int firstLetterIndex = firstLetterRow * FIRST_LETTER_COLS + firstLetterCol;
-                        
-                        if (firstLetterIndex >= LETTERS_COUNT)
-                        {
-                            firstLetterIndex = LETTERS_COUNT - 1; // Use last letter if overflow
-                        }
-                        
-                        char firstLetter = (char)('A' + firstLetterIndex);
-                        
-                        // Calculate second letter within this first letter group
-                        // Count how many cells in this first letter group have been assigned
-                        int cellsInThisGroup = 0;
-                        for (int r = 0; r <= row; r++)
-                        {
-                            int startCol = (r == row) ? 0 : 0;
-                            int endCol = (r == row) ? col : gridCols;
-                            
-                            for (int c = startCol; c < endCol; c++)
-                            {
-                                int prevFirstLetterCol = (c * FIRST_LETTER_COLS) / gridCols;
-                                int prevFirstLetterRow = (r * FIRST_LETTER_ROWS) / gridRows;
-                                int prevFirstLetterIndex = prevFirstLetterRow * FIRST_LETTER_COLS + prevFirstLetterCol;
-                                if (prevFirstLetterIndex >= LETTERS_COUNT) prevFirstLetterIndex = LETTERS_COUNT - 1;
-                                
-                                if (prevFirstLetterIndex == firstLetterIndex)
-                                {
-                                    cellsInThisGroup++;
-                                }
-                            }
-                        }
-                        
-                        char secondLetter = (char)('A' + (cellsInThisGroup % 26));
-                        
-                        string label = $"{firstLetter}{secondLetter}";
+                        int row = i / gridCols;
+                        int col = i % gridCols;
+                        char letter = (char)('A' + (i % 26));
+                        cellLabels[(row, col)] = letter.ToString();
+                    }
+                }
+                else if (shortcutLength == 2)
+                {
+                    // Two letters: AA, AB, AC, ..., AZ, BA, BB, ..., ZZ
+                    for (int i = 0; i < totalCells; i++)
+                    {
+                        int row = i / gridCols;
+                        int col = i % gridCols;
+                        int first = i / 26;
+                        int second = i % 26;
+                        string label = $"{(char)('A' + first)}{(char)('A' + second)}";
+                        cellLabels[(row, col)] = label;
+                    }
+                }
+                else // shortcutLength == 3
+                {
+                    // Three letters: AAA, AAB, AAC, ..., ZZZ
+                    for (int i = 0; i < totalCells; i++)
+                    {
+                        int row = i / gridCols;
+                        int col = i % gridCols;
+                        int first = i / (26 * 26);
+                        int remainder = i % (26 * 26);
+                        int second = remainder / 26;
+                        int third = remainder % 26;
+                        string label = $"{(char)('A' + first)}{(char)('A' + second)}{(char)('A' + third)}";
                         cellLabels[(row, col)] = label;
                     }
                 }
@@ -389,14 +395,16 @@ namespace SansMus
                             (int row, int col) = kvp.Key;
                             string label = kvp.Value;
                             
-                            // If hint mode is active, only show cells starting with firstLetter
-                            if (firstLetter != null && !label.StartsWith(firstLetter, StringComparison.OrdinalIgnoreCase))
+                            // If hint mode is active, only show cells starting with typedChars
+                            if (!string.IsNullOrEmpty(typedChars) && !label.StartsWith(typedChars, StringComparison.OrdinalIgnoreCase))
                             {
                                 continue;
                             }
                             
-                            // In hint mode, show only the second character; otherwise show full label
-                            string displayLabel = (firstLetter != null && label.Length > 1) ? label.Substring(1) : label;
+                            // In hint mode, show only the remaining characters; otherwise show full label
+                            string displayLabel = (!string.IsNullOrEmpty(typedChars) && label.Length > typedChars.Length) 
+                                ? label.Substring(typedChars.Length) 
+                                : label;
                             
                             Rectangle cellRect = new Rectangle(
                                 GetCellX(col),
@@ -571,21 +579,20 @@ namespace SansMus
             // Convert character to string for matching
             string charStr = ch.ToString();
             
-            if (firstLetter == null)
+            // Accumulate typed characters
+            typedChars += charStr;
+            
+            if (typedChars.Length >= shortcutLength)
             {
-                // First character
-                firstLetter = charStr;
-                UpdateLayeredWindowBitmap(); // Redraw to show filtered cells
-            }
-            else
-            {
-                // Second character
-                string targetLabel = firstLetter + charStr;
+                // We have enough characters, try to match
+                string targetLabel = typedChars.Substring(0, shortcutLength);
                 
                 // Find cell with this label
                 var cell = cellLabels.FirstOrDefault(kvp => kvp.Value.Equals(targetLabel, StringComparison.OrdinalIgnoreCase));
                 
-                if (cell.Key != default)
+                // Check if a match was found by verifying the value is not null/empty
+                // (FirstOrDefault returns default KeyValuePair with null value when no match is found)
+                if (!string.IsNullOrEmpty(cell.Value))
                 {
                     // Mark as closing immediately to prevent Deactivate from interfering
                     isClosing = true;
@@ -611,6 +618,17 @@ namespace SansMus
                     this.DialogResult = DialogResult.OK;
                     this.Close();
                 }
+                else
+                {
+                    // No match found, reset typedChars
+                    typedChars = "";
+                    UpdateLayeredWindowBitmap();
+                }
+            }
+            else
+            {
+                // Not enough characters yet, update display to show hint mode
+                UpdateLayeredWindowBitmap();
             }
         }
         
@@ -636,10 +654,10 @@ namespace SansMus
             // Check if Escape or Backspace is pressed (to close the overlay or cancel hint mode)
             if (e.KeyCode == Keys.Escape || e.KeyCode == Keys.Back)
             {
-                if (firstLetter != null)
+                if (!string.IsNullOrEmpty(typedChars))
                 {
                     // Cancel hint mode, return to full grid
-                    firstLetter = null;
+                    typedChars = "";
                     UpdateLayeredWindowBitmap();
                 }
                 else
@@ -653,29 +671,24 @@ namespace SansMus
                 return;
             }
             
-            if (firstLetter == null)
+            if (e.KeyCode >= Keys.A && e.KeyCode <= Keys.Z)
             {
-                // First letter
-                if (e.KeyCode >= Keys.A && e.KeyCode <= Keys.Z)
+                // Accumulate typed characters
+                // Convert to lowercase to match config format (config has lowercase shortcuts)
+                string charStr = e.KeyCode.ToString().ToLower();
+                typedChars += charStr;
+                
+                if (typedChars.Length >= shortcutLength)
                 {
-                    firstLetter = e.KeyCode.ToString().ToUpper();
-                    UpdateLayeredWindowBitmap(); // Redraw to show filtered cells
-                    e.Handled = true;
-                    // Key already marked as handled in OverlayKeyboardHook_KeyDown
-                }
-            }
-            else
-            {
-                // Second letter
-                if (e.KeyCode >= Keys.A && e.KeyCode <= Keys.Z)
-                {
-                    string secondLetter = e.KeyCode.ToString().ToUpper();
-                    string targetLabel = firstLetter + secondLetter;
+                    // We have enough characters, try to match
+                    string targetLabel = typedChars.Substring(0, shortcutLength);
                     
                     // Find cell with this label
                     var cell = cellLabels.FirstOrDefault(kvp => kvp.Value.Equals(targetLabel, StringComparison.OrdinalIgnoreCase));
                     
-                    if (cell.Key != default)
+                    // Check if a match was found by verifying the value is not null/empty
+                    // (FirstOrDefault returns default KeyValuePair with null value when no match is found)
+                    if (!string.IsNullOrEmpty(cell.Value))
                     {
                         // Mark as closing immediately to prevent Deactivate from interfering
                         isClosing = true;
@@ -701,7 +714,20 @@ namespace SansMus
                         this.DialogResult = DialogResult.OK;
                         this.Close();
                     }
+                    else
+                    {
+                        // No match found, reset typedChars
+                        typedChars = "";
+                        UpdateLayeredWindowBitmap();
+                    }
                     
+                    e.Handled = true;
+                    // Key already marked as handled in OverlayKeyboardHook_KeyDown
+                }
+                else
+                {
+                    // Not enough characters yet, update display to show hint mode
+                    UpdateLayeredWindowBitmap();
                     e.Handled = true;
                     // Key already marked as handled in OverlayKeyboardHook_KeyDown
                 }
@@ -733,22 +759,20 @@ namespace SansMus
             // Convert character to string for matching
             string charStr = e.KeyChar.ToString();
             
-            if (firstLetter == null)
+            // Accumulate typed characters
+            typedChars += charStr;
+            
+            if (typedChars.Length >= shortcutLength)
             {
-                // First character
-                firstLetter = charStr;
-                UpdateLayeredWindowBitmap(); // Redraw to show filtered cells
-                e.Handled = true;
-            }
-            else
-            {
-                // Second character
-                string targetLabel = firstLetter + charStr;
+                // We have enough characters, try to match
+                string targetLabel = typedChars.Substring(0, shortcutLength);
                 
                 // Find cell with this label
                 var cell = cellLabels.FirstOrDefault(kvp => kvp.Value.Equals(targetLabel, StringComparison.OrdinalIgnoreCase));
                 
-                if (cell.Key != default)
+                // Check if a match was found by verifying the value is not null/empty
+                // (FirstOrDefault returns default KeyValuePair with null value when no match is found)
+                if (!string.IsNullOrEmpty(cell.Value))
                 {
                     // Mark as closing immediately to prevent Deactivate from interfering
                     isClosing = true;
@@ -774,7 +798,19 @@ namespace SansMus
                     this.DialogResult = DialogResult.OK;
                     this.Close();
                 }
+                else
+                {
+                    // No match found, reset typedChars
+                    typedChars = "";
+                    UpdateLayeredWindowBitmap();
+                }
                 
+                e.Handled = true;
+            }
+            else
+            {
+                // Not enough characters yet, update display to show hint mode
+                UpdateLayeredWindowBitmap();
                 e.Handled = true;
             }
         }
@@ -813,7 +849,7 @@ namespace SansMus
         
         public void ResetHintMode()
         {
-            firstLetter = null;
+            typedChars = "";
             UpdateLayeredWindowBitmap();
         }
     }

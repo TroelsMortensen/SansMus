@@ -364,8 +364,8 @@ namespace SansMus
                 return;
             }
             
-            // Check if Escape is pressed (to close the overlay)
-            if (e.KeyCode == Keys.Escape)
+            // Check if Escape or Backspace is pressed (to close the overlay or cancel hint mode)
+            if (e.KeyCode == Keys.Escape || e.KeyCode == Keys.Back)
             {
                 if (firstLetter != null)
                 {

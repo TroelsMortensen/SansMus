@@ -325,6 +325,9 @@ namespace SansMus
                                 continue;
                             }
                             
+                            // In hint mode, show only the second character; otherwise show full label
+                            string displayLabel = (firstLetter != null && label.Length > 1) ? label.Substring(1) : label;
+                            
                             Rectangle cellRect = new Rectangle(
                                 GetCellX(col),
                                 GetCellY(row),
@@ -344,12 +347,12 @@ namespace SansMus
                                         cellRect.Width,
                                         cellRect.Height
                                     );
-                                    g.DrawString(label, labelFont, outlineBrush, outlineRect, format);
+                                    g.DrawString(displayLabel, labelFont, outlineBrush, outlineRect, format);
                                 }
                             }
                             
                             // Draw white text on top
-                            g.DrawString(label, labelFont, textBrush, cellRect, format);
+                            g.DrawString(displayLabel, labelFont, textBrush, cellRect, format);
                         }
                     }
                 }

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Drawing;
 using System.IO;
 using System.Text.Json;
 using System.Windows.Forms;
@@ -49,6 +50,10 @@ namespace SansMus
         private Keys? turnRightKey = null;
         private HashSet<Keys> heldTurnKeys = new HashSet<Keys>();
         
+        // System tray components
+        private NotifyIcon? notifyIcon = null;
+        private ContextMenuStrip? trayContextMenu = null;
+        
         public MainForm()
         {
             try
@@ -62,6 +67,9 @@ namespace SansMus
             }
             
             InitializeComponent();
+            
+            // Initialize system tray icon
+            InitializeTrayIcon();
             
             // Create orbital visualization form if orbital mouse is enabled
             if (useOrbitalMouse)
@@ -95,8 +103,10 @@ namespace SansMus
             this.Text = "SansMus - Keyboard Mouse Control";
             this.Size = new System.Drawing.Size(300, 250);
             this.StartPosition = FormStartPosition.CenterScreen;
+            this.ShowInTaskbar = false; // Hide from taskbar, show in system tray instead
             this.FormClosing += MainForm_FormClosing;
             this.Activated += MainForm_Activated;
+            this.Resize += MainForm_Resize;
             
             string hotkeyText = configuredHotkey?.ToString() ?? "SPACE";
             string labelText = $"Press {hotkeyText} to show grid overlay.\nPress ESC in overlay to close.";
@@ -708,6 +718,60 @@ namespace SansMus
             keyboardHook = new GlobalKeyboardHook();
             keyboardHook.KeyDown += KeyboardHook_KeyDown;
             keyboardHook.KeyUp += KeyboardHook_KeyUp;
+        }
+        
+        private void InitializeTrayIcon()
+        {
+            // Create context menu
+            trayContextMenu = new ContextMenuStrip();
+            
+            // Add "Show Window" menu item
+            ToolStripMenuItem showWindowItem = new ToolStripMenuItem("Show Window");
+            showWindowItem.Click += (sender, e) => ShowWindow();
+            trayContextMenu.Items.Add(showWindowItem);
+            
+            // Add separator
+            trayContextMenu.Items.Add(new ToolStripSeparator());
+            
+            // Add "Reload Config" menu item
+            ToolStripMenuItem reloadConfigItem = new ToolStripMenuItem("Reload Config");
+            reloadConfigItem.Click += (sender, e) => ReloadConfig();
+            trayContextMenu.Items.Add(reloadConfigItem);
+            
+            // Add separator
+            trayContextMenu.Items.Add(new ToolStripSeparator());
+            
+            // Add "Exit" menu item
+            ToolStripMenuItem exitItem = new ToolStripMenuItem("Exit");
+            exitItem.Click += (sender, e) => ExitApplication();
+            trayContextMenu.Items.Add(exitItem);
+            
+            // Create notify icon
+            notifyIcon = new NotifyIcon();
+            notifyIcon.Icon = this.Icon ?? SystemIcons.Application; // Use form icon or default application icon
+            notifyIcon.Text = "SansMus - Keyboard Mouse Control";
+            notifyIcon.ContextMenuStrip = trayContextMenu;
+            notifyIcon.Visible = true;
+            
+            // Double-click to show window
+            notifyIcon.DoubleClick += (sender, e) => ShowWindow();
+        }
+        
+        private void ShowWindow()
+        {
+            if (this.WindowState == FormWindowState.Minimized)
+            {
+                this.WindowState = FormWindowState.Normal;
+            }
+            this.Show();
+            this.Activate();
+            this.BringToFront();
+        }
+        
+        private void ExitApplication()
+        {
+            // Close the application
+            Application.Exit();
         }
         
         private void KeyboardHook_KeyDown(object? sender, KeyEventArgs e)
@@ -1415,14 +1479,52 @@ namespace SansMus
             }
         }
         
+        private void MainForm_Resize(object? sender, EventArgs e)
+        {
+            // When form is minimized, hide it and show in tray
+            if (this.WindowState == FormWindowState.Minimized)
+            {
+                this.Hide();
+                if (notifyIcon != null)
+                {
+                    notifyIcon.ShowBalloonTip(1000, "SansMus", "Application minimized to system tray", ToolTipIcon.Info);
+                }
+            }
+        }
+        
         private void MainForm_FormClosing(object? sender, FormClosingEventArgs e)
         {
+            // If user is closing (not from Exit menu), minimize to tray instead
+            if (e.CloseReason == CloseReason.UserClosing)
+            {
+                e.Cancel = true;
+                this.WindowState = FormWindowState.Minimized;
+                this.Hide();
+                if (notifyIcon != null)
+                {
+                    notifyIcon.ShowBalloonTip(1000, "SansMus", "Application minimized to system tray. Use Exit from tray menu to close.", ToolTipIcon.Info);
+                }
+                return;
+            }
+            
+            // Cleanup on actual exit
             movementTimer?.Stop();
             movementTimer?.Dispose();
             keyboardHook?.Dispose();
             overlayForm?.Dispose();
             orbitalVisualizationForm?.Close();
             orbitalVisualizationForm?.Dispose();
+            
+            // Cleanup tray icon
+            if (notifyIcon != null)
+            {
+                notifyIcon.Visible = false;
+                notifyIcon.Dispose();
+            }
+            if (trayContextMenu != null)
+            {
+                trayContextMenu.Dispose();
+            }
         }
         
         [STAThread]

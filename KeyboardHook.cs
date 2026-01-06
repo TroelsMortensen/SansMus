@@ -18,11 +18,13 @@ namespace SansMus
         
         private const int WH_KEYBOARD_LL = 13;
         private const int WM_KEYDOWN = 0x0100;
+        private const int WM_KEYUP = 0x0101;
         
         private LowLevelKeyboardProc _proc;
         private IntPtr _hookID = IntPtr.Zero;
         
         public event KeyEventHandler? KeyDown;
+        public event KeyEventHandler? KeyUp;
         
         public GlobalKeyboardHook()
         {
@@ -46,13 +48,21 @@ namespace SansMus
         {
             try
             {
-                if (nCode >= 0 && wParam == (IntPtr)WM_KEYDOWN)
+                if (nCode >= 0)
                 {
                     KBDLLHOOKSTRUCT kbStruct = (KBDLLHOOKSTRUCT)Marshal.PtrToStructure(lParam, typeof(KBDLLHOOKSTRUCT))!;
                     Keys key = (Keys)kbStruct.vkCode;
                     
                     KeyEventArgs e = new KeyEventArgs(key);
-                    KeyDown?.Invoke(this, e);
+                    
+                    if (wParam == (IntPtr)WM_KEYDOWN)
+                    {
+                        KeyDown?.Invoke(this, e);
+                    }
+                    else if (wParam == (IntPtr)WM_KEYUP)
+                    {
+                        KeyUp?.Invoke(this, e);
+                    }
                 }
             }
             catch (Exception)

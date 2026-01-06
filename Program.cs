@@ -19,6 +19,19 @@ namespace SansMus
         private double gridOpacity = 1.0; // Default: fully opaque grid
         private string? duplicateWarning = null;
         
+        // Mouse movement configuration
+        private double defaultSpeedPixelsPerSecond = 10.0;
+        private Keys? moveUpKey = null;
+        private Keys? moveDownKey = null;
+        private Keys? moveLeftKey = null;
+        private Keys? moveRightKey = null;
+        private Dictionary<Keys, double> speedModifiers = new Dictionary<Keys, double>();
+        private HashSet<Keys> heldDirectionKeys = new HashSet<Keys>();
+        private HashSet<Keys> heldSpeedModifierKeys = new HashSet<Keys>();
+        private System.Windows.Forms.Timer? movementTimer = null;
+        private double accumulatedMoveX = 0.0;
+        private double accumulatedMoveY = 0.0;
+        
         public MainForm()
         {
             try
@@ -229,6 +242,92 @@ namespace SansMus
                         CellShortcuts = cellShortcuts
                     });
                 }
+                
+                // Load mouse movement configuration (optional)
+                if (doc.RootElement.TryGetProperty("MouseMovement", out var mouseMovement))
+                {
+                    // Parse default speed
+                    if (mouseMovement.TryGetProperty("DefaultSpeedInPixelsPerSecond", out var defaultSpeedProp))
+                    {
+                        if (defaultSpeedProp.ValueKind == JsonValueKind.Number)
+                        {
+                            defaultSpeedPixelsPerSecond = defaultSpeedProp.GetDouble();
+                            if (defaultSpeedPixelsPerSecond <= 0)
+                            {
+                                throw new InvalidOperationException($"DefaultSpeedInPixelsPerSecond must be greater than 0, got {defaultSpeedPixelsPerSecond}.");
+                            }
+                        }
+                    }
+                    
+                    // Parse directional keys
+                    if (mouseMovement.TryGetProperty("MoveUp", out var moveUpProp))
+                    {
+                        string? moveUpStr = moveUpProp.GetString();
+                        if (!string.IsNullOrWhiteSpace(moveUpStr))
+                        {
+                            moveUpKey = ParseHotkey(moveUpStr);
+                        }
+                    }
+                    
+                    if (mouseMovement.TryGetProperty("MoveDown", out var moveDownProp))
+                    {
+                        string? moveDownStr = moveDownProp.GetString();
+                        if (!string.IsNullOrWhiteSpace(moveDownStr))
+                        {
+                            moveDownKey = ParseHotkey(moveDownStr);
+                        }
+                    }
+                    
+                    if (mouseMovement.TryGetProperty("MoveLeft", out var moveLeftProp))
+                    {
+                        string? moveLeftStr = moveLeftProp.GetString();
+                        if (!string.IsNullOrWhiteSpace(moveLeftStr))
+                        {
+                            moveLeftKey = ParseHotkey(moveLeftStr);
+                        }
+                    }
+                    
+                    if (mouseMovement.TryGetProperty("MoveRight", out var moveRightProp))
+                    {
+                        string? moveRightStr = moveRightProp.GetString();
+                        if (!string.IsNullOrWhiteSpace(moveRightStr))
+                        {
+                            moveRightKey = ParseHotkey(moveRightStr);
+                        }
+                    }
+                    
+                    // Parse speed modifiers
+                    speedModifiers.Clear();
+                    string[] speedKeys = { "Speed0", "Speed1", "Speed2" };
+                    foreach (string speedKey in speedKeys)
+                    {
+                        if (mouseMovement.TryGetProperty(speedKey, out var speedProp) && speedProp.ValueKind == JsonValueKind.Object)
+                        {
+                            if (speedProp.TryGetProperty("HotKey", out var speedHotkeyProp))
+                            {
+                                string? speedHotkeyStr = speedHotkeyProp.GetString();
+                                if (!string.IsNullOrWhiteSpace(speedHotkeyStr))
+                                {
+                                    Keys? speedKeyValue = ParseHotkey(speedHotkeyStr);
+                                    if (speedKeyValue != null)
+                                    {
+                                        if (speedProp.TryGetProperty("SpeedInPixelsPerSecond", out var speedValueProp))
+                                        {
+                                            if (speedValueProp.ValueKind == JsonValueKind.Number)
+                                            {
+                                                double speed = speedValueProp.GetDouble();
+                                                if (speed > 0)
+                                                {
+                                                    speedModifiers[speedKeyValue.Value] = speed;
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
         
@@ -359,6 +458,7 @@ namespace SansMus
         {
             keyboardHook = new GlobalKeyboardHook();
             keyboardHook.KeyDown += KeyboardHook_KeyDown;
+            keyboardHook.KeyUp += KeyboardHook_KeyUp;
         }
         
         private void KeyboardHook_KeyDown(object? sender, KeyEventArgs e)
@@ -387,6 +487,69 @@ namespace SansMus
                     {
                         ShowGridOverlay();
                     }
+                    e.Handled = true;
+                    return;
+                }
+                
+                // Handle mouse movement keys (only when overlay is not visible)
+                if (overlayForm == null || overlayForm.IsDisposed)
+                {
+                    bool keyHandled = false;
+                    
+                    // Check if it's a directional key
+                    if ((moveUpKey != null && e.KeyCode == moveUpKey.Value) ||
+                        (moveDownKey != null && e.KeyCode == moveDownKey.Value) ||
+                        (moveLeftKey != null && e.KeyCode == moveLeftKey.Value) ||
+                        (moveRightKey != null && e.KeyCode == moveRightKey.Value))
+                    {
+                        if (!heldDirectionKeys.Contains(e.KeyCode))
+                        {
+                            heldDirectionKeys.Add(e.KeyCode);
+                            StartMovementTimer();
+                        }
+                        keyHandled = true;
+                    }
+                    
+                    // Check if it's a speed modifier key
+                    if (speedModifiers.ContainsKey(e.KeyCode))
+                    {
+                        if (!heldSpeedModifierKeys.Contains(e.KeyCode))
+                        {
+                            heldSpeedModifierKeys.Add(e.KeyCode);
+                        }
+                        keyHandled = true;
+                    }
+                    
+                    if (keyHandled)
+                    {
+                        e.Handled = true;
+                    }
+                }
+            }
+            catch (Exception)
+            {
+                // Handle exceptions silently to prevent crash
+            }
+        }
+        
+        private void KeyboardHook_KeyUp(object? sender, KeyEventArgs e)
+        {
+            try
+            {
+                // Handle mouse movement keys
+                if (heldDirectionKeys.Contains(e.KeyCode))
+                {
+                    heldDirectionKeys.Remove(e.KeyCode);
+                    if (heldDirectionKeys.Count == 0)
+                    {
+                        StopMovementTimer();
+                    }
+                    e.Handled = true;
+                }
+                
+                if (heldSpeedModifierKeys.Contains(e.KeyCode))
+                {
+                    heldSpeedModifierKeys.Remove(e.KeyCode);
                     e.Handled = true;
                 }
             }
@@ -508,6 +671,19 @@ namespace SansMus
             monitorConfigs = null;
             gridOpacity = 1.0;
             
+            // Reset mouse movement state
+            defaultSpeedPixelsPerSecond = 10.0;
+            moveUpKey = null;
+            moveDownKey = null;
+            moveLeftKey = null;
+            moveRightKey = null;
+            speedModifiers.Clear();
+            heldDirectionKeys.Clear();
+            heldSpeedModifierKeys.Clear();
+            accumulatedMoveX = 0.0;
+            accumulatedMoveY = 0.0;
+            StopMovementTimer();
+            
             // Dispose existing keyboard hook
             if (keyboardHook != null)
             {
@@ -605,8 +781,136 @@ namespace SansMus
             }
         }
         
+        private double GetCurrentSpeed()
+        {
+            // If any speed modifier keys are held, use the highest speed from those modifiers
+            if (heldSpeedModifierKeys.Count > 0)
+            {
+                double maxSpeed = 0;
+                foreach (Keys key in heldSpeedModifierKeys)
+                {
+                    if (speedModifiers.TryGetValue(key, out double speed))
+                    {
+                        if (speed > maxSpeed)
+                        {
+                            maxSpeed = speed;
+                        }
+                    }
+                }
+                return maxSpeed;
+            }
+            
+            // Otherwise, use default speed
+            return defaultSpeedPixelsPerSecond;
+        }
+        
+        private void StartMovementTimer()
+        {
+            if (this.InvokeRequired)
+            {
+                this.BeginInvoke(new Action(() => StartMovementTimer()));
+                return;
+            }
+            
+            if (movementTimer == null)
+            {
+                movementTimer = new System.Windows.Forms.Timer();
+                movementTimer.Interval = 16; // ~60fps for smooth movement
+                movementTimer.Tick += MovementTimer_Tick;
+            }
+            
+            if (!movementTimer.Enabled)
+            {
+                movementTimer.Start();
+            }
+        }
+        
+        private void StopMovementTimer()
+        {
+            if (this.InvokeRequired)
+            {
+                this.BeginInvoke(new Action(() => StopMovementTimer()));
+                return;
+            }
+            
+            if (movementTimer != null && movementTimer.Enabled)
+            {
+                movementTimer.Stop();
+            }
+        }
+        
+        private void MovementTimer_Tick(object? sender, EventArgs e)
+        {
+            if (heldDirectionKeys.Count == 0)
+            {
+                StopMovementTimer();
+                return;
+            }
+            
+            // Calculate current speed
+            double speed = GetCurrentSpeed();
+            
+            // Calculate movement delta based on speed and timer interval
+            double pixelsPerFrame = (speed * movementTimer!.Interval) / 1000.0;
+            
+            // Calculate direction vector
+            int deltaX = 0;
+            int deltaY = 0;
+            
+            if (moveUpKey != null && heldDirectionKeys.Contains(moveUpKey.Value))
+            {
+                deltaY -= 1;
+            }
+            if (moveDownKey != null && heldDirectionKeys.Contains(moveDownKey.Value))
+            {
+                deltaY += 1;
+            }
+            if (moveLeftKey != null && heldDirectionKeys.Contains(moveLeftKey.Value))
+            {
+                deltaX -= 1;
+            }
+            if (moveRightKey != null && heldDirectionKeys.Contains(moveRightKey.Value))
+            {
+                deltaX += 1;
+            }
+            
+            // Normalize diagonal movement to maintain consistent speed
+            double magnitude = Math.Sqrt(deltaX * deltaX + deltaY * deltaY);
+            if (magnitude > 0)
+            {
+                // Normalize the vector to maintain consistent speed in all directions
+                double normalizedX = deltaX / magnitude;
+                double normalizedY = deltaY / magnitude;
+                
+                // Calculate movement delta with normalized direction
+                double moveDeltaX = normalizedX * pixelsPerFrame;
+                double moveDeltaY = normalizedY * pixelsPerFrame;
+                
+                // Accumulate fractional movement
+                accumulatedMoveX += moveDeltaX;
+                accumulatedMoveY += moveDeltaY;
+                
+                // Move cursor by whole pixels, keeping remainder for next frame
+                int moveX = (int)accumulatedMoveX;
+                int moveY = (int)accumulatedMoveY;
+                
+                // Keep the fractional part for next frame
+                accumulatedMoveX -= moveX;
+                accumulatedMoveY -= moveY;
+                
+                // Move the cursor
+                if (moveX != 0 || moveY != 0)
+                {
+                    Point currentPos = Cursor.Position;
+                    Cursor.Position = new Point(currentPos.X + moveX, currentPos.Y + moveY);
+                }
+            }
+        }
+        
         private void MainForm_FormClosing(object? sender, FormClosingEventArgs e)
         {
+            movementTimer?.Stop();
+            movementTimer?.Dispose();
             keyboardHook?.Dispose();
             overlayForm?.Dispose();
         }

@@ -29,17 +29,17 @@
     ]
   },
   "MouseMovement": {
-    "DefaultSpeedInPixelsPerSecond": 10.0,
+    "DefaultSpeedInPixelsPerSecond": 1500.0,
     "MoveUp": "F14",
     "MoveDown": "F15",
     "MoveLeft": "F16",
     "MoveRight": "F17",
     "Speed0": {
-      "SpeedInPixelsPerSecond": 1.0,
+      "SpeedInPixelsPerSecond": 200.0,
       "HotKey" :"F18"
     },
     "Speed1": {
-      "SpeedInPixelsPerSecond": 50.0,
+      "SpeedInPixelsPerSecond": 5000.0,
       "HotKey" :"F19"
     },
     "Speed2": {

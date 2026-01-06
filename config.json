@@ -21,7 +21,7 @@
         "numOfColumns": 7,
         "cellShortcuts": [
           "er", "rr", "rt", "tt", "yy", "uy", "uu",
-          "dr", "fr", "fg", "gt", "hy", "jy", "ju",
+          "dr", "fr", "ft", "gt", "hy", "jy", "ju",
           "df", "ff", "fg", "gg", "hh", "jh", "jj",
           "cv", "vv", "vb", "bb", "nn", "mn", "mm"
         ]

@@ -1,0 +1,37 @@
+{
+  "WarpGrid": {
+    "hotkey": "F13",
+    "opacity": 0.7,
+    "monitors": [
+      {
+        "numOfRows": 7,
+        "numOfColumns": 18,
+        "cellShortcuts": [
+          "qq", "qw", "ww", "we", "ee", "er", "rr", "rt", "tt", "yy", "uy", "uu", "iu", "ii", "oi", "oo", "po", "pp",
+          "qa", "qs", "ws", "wd", "ed", "ef", "rf", "rg", "tg", "ll", "kl", "kk", "jk", "jj", "hj", "hh", "jh", "jj",
+          "aq", "aw", "sw", "se", "de", "dr", "fr", "fg", "gt", "ll", "kl", "kk", "jk", "jj", "hj", "hh", "jh", "jj",
+          "aa", "as", "ss", "sd", "dd", "df", "ff", "fg", "gg", "ll", "kl", "kk", "jk", "jj", "hj", "hh", "jh", "jj",
+          "az", "ax", "sz", "sx", "dx", "dc", "fc", "fv", "gv", "nn", "mn", "mm", "nm", "nn", "mn", "mm", "nm", "nn",
+          "za", "zs", "xs", "xd", "cd", "cf", "vf", "vg", "bv", "nn", "mn", "mm", "nm", "nn", "mn", "mm", "nm", "nn",
+          "zz", "zx", "xx", "xc", "cc", "cv", "vv", "vb", "bb", "åå", "å.", "å,", ",å", ",,", ".,", "m,", "mm", "mn"
+        ]
+      },
+      {
+        "numOfRows": 4,
+        "numOfColumns": 7,
+        "cellShortcuts": [
+          "qq", "qw", "ww", "yy", "uy", "uu", "iu",
+          "aa", "as", "ss", "ll", "kl", "kk", "jk",
+          "aa", "as", "ss", "ll", "kl", "kk", "jk",
+          "zz", "zx", "xx", "åå", "å.", "å,", ",å"
+        ]
+      }
+    ]
+  },
+  "MouseMovement": {
+    "enabled": false,
+    "movementSpeed": 1.0,
+    "acceleration": 1.0,
+    "scrollSpeed": 1.0
+  }
+}

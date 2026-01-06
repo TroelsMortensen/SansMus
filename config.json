@@ -29,6 +29,7 @@
     ]
   },
   "MouseMovement": {
+    "ControlScheme": "Directional",
     "DefaultSpeedInPixelsPerSecond": 1500.0,
     "MoveUp": "F14",
     "MoveDown": "F15",
@@ -46,5 +47,11 @@
       "SpeedInPixelsPerSecond": 100.0,
       "HotKey" :"F20"
     }
+  },
+  "OrbitalMouseMovement": {
+    "MoveForward": "F14",
+    "MoveBackward": "F15",
+    "TurnLeft": "F16",
+    "TurnRight": "F17"
   }
 }

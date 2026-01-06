@@ -10,11 +10,13 @@ namespace SansMus
     {
         private GlobalKeyboardHook? keyboardHook;
         private GridOverlayForm? overlayForm;
+        private OrbitalVisualizationForm? orbitalVisualizationForm = null;
         private Keys? configuredHotkey = null; // null means config invalid
         private string? configError = null;
         private Label? infoLabel;
         private Button? testButton;
         private Button? reloadButton;
+        private CheckBox? orbitalCheckBox;
         private List<MonitorConfig>? monitorConfigs = null;
         private double gridOpacity = 1.0; // Default: fully opaque grid
         private string? duplicateWarning = null;
@@ -32,6 +34,16 @@ namespace SansMus
         private double accumulatedMoveX = 0.0;
         private double accumulatedMoveY = 0.0;
         
+        // Orbital mouse configuration
+        private const double ROTATION_POINT_DISTANCE = 25.0; // Distance behind cursor for rotation point (in pixels)
+        private bool useOrbitalMouse = false;
+        private double currentHeading = 0.0; // Heading angle in degrees (0 = up/north, 90 = right/east)
+        private Keys? moveForwardKey = null;
+        private Keys? moveBackwardKey = null;
+        private Keys? turnLeftKey = null;
+        private Keys? turnRightKey = null;
+        private HashSet<Keys> heldTurnKeys = new HashSet<Keys>();
+        
         public MainForm()
         {
             try
@@ -45,6 +57,13 @@ namespace SansMus
             }
             
             InitializeComponent();
+            
+            // Create orbital visualization form if orbital mouse is enabled
+            if (useOrbitalMouse)
+            {
+                orbitalVisualizationForm = new OrbitalVisualizationForm();
+                orbitalVisualizationForm.Show();
+            }
             
             if (configuredHotkey == null)
             {
@@ -99,6 +118,16 @@ namespace SansMus
             }
             
             this.Controls.Add(infoLabel);
+            
+            orbitalCheckBox = new CheckBox
+            {
+                Text = "Use Orbital Mouse Controls",
+                Dock = DockStyle.Top,
+                Height = 30,
+                Checked = useOrbitalMouse
+            };
+            orbitalCheckBox.CheckedChanged += OrbitalCheckBox_CheckedChanged;
+            this.Controls.Add(orbitalCheckBox);
             
             reloadButton = new Button
             {
@@ -246,6 +275,17 @@ namespace SansMus
                 // Load mouse movement configuration (optional)
                 if (doc.RootElement.TryGetProperty("MouseMovement", out var mouseMovement))
                 {
+                    // Parse control scheme (default: "Directional")
+                    useOrbitalMouse = false;
+                    if (mouseMovement.TryGetProperty("ControlScheme", out var controlSchemeProp))
+                    {
+                        string? controlSchemeStr = controlSchemeProp.GetString();
+                        if (!string.IsNullOrWhiteSpace(controlSchemeStr) && controlSchemeStr.Equals("Orbital", StringComparison.OrdinalIgnoreCase))
+                        {
+                            useOrbitalMouse = true;
+                        }
+                    }
+                    
                     // Parse default speed
                     if (mouseMovement.TryGetProperty("DefaultSpeedInPixelsPerSecond", out var defaultSpeedProp))
                     {
@@ -325,6 +365,47 @@ namespace SansMus
                                     }
                                 }
                             }
+                        }
+                    }
+                }
+                
+                // Load orbital mouse movement configuration (optional, always load so checkbox toggle works)
+                if (doc.RootElement.TryGetProperty("OrbitalMouseMovement", out var orbitalMouseMovement))
+                {
+                    // Parse orbital movement keys
+                    if (orbitalMouseMovement.TryGetProperty("MoveForward", out var moveForwardProp))
+                    {
+                        string? moveForwardStr = moveForwardProp.GetString();
+                        if (!string.IsNullOrWhiteSpace(moveForwardStr))
+                        {
+                            moveForwardKey = ParseHotkey(moveForwardStr);
+                        }
+                    }
+                    
+                    if (orbitalMouseMovement.TryGetProperty("MoveBackward", out var moveBackwardProp))
+                    {
+                        string? moveBackwardStr = moveBackwardProp.GetString();
+                        if (!string.IsNullOrWhiteSpace(moveBackwardStr))
+                        {
+                            moveBackwardKey = ParseHotkey(moveBackwardStr);
+                        }
+                    }
+                    
+                    if (orbitalMouseMovement.TryGetProperty("TurnLeft", out var turnLeftProp))
+                    {
+                        string? turnLeftStr = turnLeftProp.GetString();
+                        if (!string.IsNullOrWhiteSpace(turnLeftStr))
+                        {
+                            turnLeftKey = ParseHotkey(turnLeftStr);
+                        }
+                    }
+                    
+                    if (orbitalMouseMovement.TryGetProperty("TurnRight", out var turnRightProp))
+                    {
+                        string? turnRightStr = turnRightProp.GetString();
+                        if (!string.IsNullOrWhiteSpace(turnRightStr))
+                        {
+                            turnRightKey = ParseHotkey(turnRightStr);
                         }
                     }
                 }
@@ -496,21 +577,49 @@ namespace SansMus
                 {
                     bool keyHandled = false;
                     
-                    // Check if it's a directional key
-                    if ((moveUpKey != null && e.KeyCode == moveUpKey.Value) ||
-                        (moveDownKey != null && e.KeyCode == moveDownKey.Value) ||
-                        (moveLeftKey != null && e.KeyCode == moveLeftKey.Value) ||
-                        (moveRightKey != null && e.KeyCode == moveRightKey.Value))
+                    if (useOrbitalMouse)
                     {
-                        if (!heldDirectionKeys.Contains(e.KeyCode))
+                        // Orbital mouse mode: forward/backward and turn keys
+                        if ((moveForwardKey != null && e.KeyCode == moveForwardKey.Value) ||
+                            (moveBackwardKey != null && e.KeyCode == moveBackwardKey.Value))
                         {
-                            heldDirectionKeys.Add(e.KeyCode);
-                            StartMovementTimer();
+                            if (!heldDirectionKeys.Contains(e.KeyCode))
+                            {
+                                heldDirectionKeys.Add(e.KeyCode);
+                                StartMovementTimer();
+                            }
+                            keyHandled = true;
                         }
-                        keyHandled = true;
+                        
+                        if ((turnLeftKey != null && e.KeyCode == turnLeftKey.Value) ||
+                            (turnRightKey != null && e.KeyCode == turnRightKey.Value))
+                        {
+                            if (!heldTurnKeys.Contains(e.KeyCode))
+                            {
+                                heldTurnKeys.Add(e.KeyCode);
+                                StartMovementTimer();
+                            }
+                            keyHandled = true;
+                        }
+                    }
+                    else
+                    {
+                        // Directional mode: up/down/left/right keys
+                        if ((moveUpKey != null && e.KeyCode == moveUpKey.Value) ||
+                            (moveDownKey != null && e.KeyCode == moveDownKey.Value) ||
+                            (moveLeftKey != null && e.KeyCode == moveLeftKey.Value) ||
+                            (moveRightKey != null && e.KeyCode == moveRightKey.Value))
+                        {
+                            if (!heldDirectionKeys.Contains(e.KeyCode))
+                            {
+                                heldDirectionKeys.Add(e.KeyCode);
+                                StartMovementTimer();
+                            }
+                            keyHandled = true;
+                        }
                     }
                     
-                    // Check if it's a speed modifier key
+                    // Check if it's a speed modifier key (works for both modes)
                     if (speedModifiers.ContainsKey(e.KeyCode))
                     {
                         if (!heldSpeedModifierKeys.Contains(e.KeyCode))
@@ -540,7 +649,18 @@ namespace SansMus
                 if (heldDirectionKeys.Contains(e.KeyCode))
                 {
                     heldDirectionKeys.Remove(e.KeyCode);
-                    if (heldDirectionKeys.Count == 0)
+                    if (heldDirectionKeys.Count == 0 && heldTurnKeys.Count == 0)
+                    {
+                        StopMovementTimer();
+                    }
+                    e.Handled = true;
+                }
+                
+                // Handle turn keys (orbital mode)
+                if (heldTurnKeys.Contains(e.KeyCode))
+                {
+                    heldTurnKeys.Remove(e.KeyCode);
+                    if (heldDirectionKeys.Count == 0 && heldTurnKeys.Count == 0)
                     {
                         StopMovementTimer();
                     }
@@ -659,6 +779,45 @@ namespace SansMus
             ReloadConfig();
         }
         
+        private void OrbitalCheckBox_CheckedChanged(object? sender, EventArgs e)
+        {
+            if (orbitalCheckBox == null) return;
+            
+            useOrbitalMouse = orbitalCheckBox.Checked;
+            
+            // Stop movement timer if running
+            StopMovementTimer();
+            
+            // Clear all held keys
+            heldDirectionKeys.Clear();
+            heldTurnKeys.Clear();
+            
+            // Show or hide orbital visualization
+            if (useOrbitalMouse)
+            {
+                if (orbitalVisualizationForm == null || orbitalVisualizationForm.IsDisposed)
+                {
+                    orbitalVisualizationForm = new OrbitalVisualizationForm();
+                    orbitalVisualizationForm.Show();
+                }
+            }
+            else
+            {
+                if (orbitalVisualizationForm != null && !orbitalVisualizationForm.IsDisposed)
+                {
+                    orbitalVisualizationForm.Close();
+                    orbitalVisualizationForm.Dispose();
+                    orbitalVisualizationForm = null;
+                }
+            }
+            
+            // Reset heading when switching to orbital (optional - could persist)
+            // For now, we'll keep the heading persistent as per user preference
+            
+            // Update UI to reflect current scheme
+            UpdateUIAfterReload();
+        }
+        
         private void ReloadConfig()
         {
             // Store old hotkey to check if it changed
@@ -684,6 +843,14 @@ namespace SansMus
             accumulatedMoveY = 0.0;
             StopMovementTimer();
             
+            // Reset orbital mouse state
+            moveForwardKey = null;
+            moveBackwardKey = null;
+            turnLeftKey = null;
+            turnRightKey = null;
+            heldTurnKeys.Clear();
+            currentHeading = 0.0;
+            
             // Dispose existing keyboard hook
             if (keyboardHook != null)
             {
@@ -698,6 +865,31 @@ namespace SansMus
                 
                 // Update UI
                 UpdateUIAfterReload();
+                
+                // Sync checkbox state with config
+                if (orbitalCheckBox != null)
+                {
+                    orbitalCheckBox.Checked = useOrbitalMouse;
+                }
+                
+                // Update orbital visualization form based on new config
+                if (useOrbitalMouse)
+                {
+                    if (orbitalVisualizationForm == null || orbitalVisualizationForm.IsDisposed)
+                    {
+                        orbitalVisualizationForm = new OrbitalVisualizationForm();
+                        orbitalVisualizationForm.Show();
+                    }
+                }
+                else
+                {
+                    if (orbitalVisualizationForm != null && !orbitalVisualizationForm.IsDisposed)
+                    {
+                        orbitalVisualizationForm.Close();
+                        orbitalVisualizationForm.Dispose();
+                        orbitalVisualizationForm = null;
+                    }
+                }
                 
                 // Re-initialize keyboard hook if hotkey is valid
                 if (configuredHotkey != null)
@@ -841,7 +1033,7 @@ namespace SansMus
         
         private void MovementTimer_Tick(object? sender, EventArgs e)
         {
-            if (heldDirectionKeys.Count == 0)
+            if (heldDirectionKeys.Count == 0 && heldTurnKeys.Count == 0)
             {
                 StopMovementTimer();
                 return;
@@ -853,42 +1045,86 @@ namespace SansMus
             // Calculate movement delta based on speed and timer interval
             double pixelsPerFrame = (speed * movementTimer!.Interval) / 1000.0;
             
-            // Calculate direction vector
-            int deltaX = 0;
-            int deltaY = 0;
-            
-            if (moveUpKey != null && heldDirectionKeys.Contains(moveUpKey.Value))
+            if (useOrbitalMouse)
             {
-                deltaY -= 1;
-            }
-            if (moveDownKey != null && heldDirectionKeys.Contains(moveDownKey.Value))
-            {
-                deltaY += 1;
-            }
-            if (moveLeftKey != null && heldDirectionKeys.Contains(moveLeftKey.Value))
-            {
-                deltaX -= 1;
-            }
-            if (moveRightKey != null && heldDirectionKeys.Contains(moveRightKey.Value))
-            {
-                deltaX += 1;
-            }
-            
-            // Normalize diagonal movement to maintain consistent speed
-            double magnitude = Math.Sqrt(deltaX * deltaX + deltaY * deltaY);
-            if (magnitude > 0)
-            {
-                // Normalize the vector to maintain consistent speed in all directions
-                double normalizedX = deltaX / magnitude;
-                double normalizedY = deltaY / magnitude;
+                // Orbital mouse mode
+                Point currentPos = Cursor.Position;
+                double headingRad = currentHeading * Math.PI / 180.0;
                 
-                // Calculate movement delta with normalized direction
-                double moveDeltaX = normalizedX * pixelsPerFrame;
-                double moveDeltaY = normalizedY * pixelsPerFrame;
+                // Calculate rotation point (25 pixels behind cursor in opposite direction of heading)
+                double rotationPointX = currentPos.X - ROTATION_POINT_DISTANCE * Math.Sin(headingRad);
+                double rotationPointY = currentPos.Y + ROTATION_POINT_DISTANCE * Math.Cos(headingRad); // Positive because Y increases downward
+                
+                bool isTurning = (turnLeftKey != null && heldTurnKeys.Contains(turnLeftKey.Value)) ||
+                                (turnRightKey != null && heldTurnKeys.Contains(turnRightKey.Value));
+                
+                double newX = currentPos.X;
+                double newY = currentPos.Y;
+                
+                // Handle rotation around rotation point
+                if (isTurning)
+                {
+                    double turnRate = speed * 0.25; // Turn rate is 25% of movement speed (degrees per second)
+                    double turnDeltaRad = (turnRate * movementTimer.Interval / 1000.0) * Math.PI / 180.0;
+                    
+                    // Determine turn direction
+                    if (turnLeftKey != null && heldTurnKeys.Contains(turnLeftKey.Value))
+                    {
+                        turnDeltaRad = -turnDeltaRad; // Counter-clockwise
+                    }
+                    // else turnRightKey is clockwise (positive)
+                    
+                    // Translate cursor position relative to rotation point
+                    double dx = currentPos.X - rotationPointX;
+                    double dy = currentPos.Y - rotationPointY;
+                    
+                    // Apply rotation matrix
+                    double cosAngle = Math.Cos(turnDeltaRad);
+                    double sinAngle = Math.Sin(turnDeltaRad);
+                    double rotatedX = dx * cosAngle - dy * sinAngle;
+                    double rotatedY = dx * sinAngle + dy * cosAngle;
+                    
+                    // Translate back to absolute coordinates
+                    newX = rotatedX + rotationPointX;
+                    newY = rotatedY + rotationPointY;
+                    
+                    // Update heading based on new cursor position relative to rotation point
+                    double newDx = newX - rotationPointX;
+                    double newDy = newY - rotationPointY;
+                    // Calculate angle from rotation point to cursor (0 = up/north, increases clockwise)
+                    double newHeadingRad = Math.Atan2(newDx, -newDy); // Negative Y because screen Y increases downward
+                    currentHeading = newHeadingRad * 180.0 / Math.PI;
+                    
+                    // Normalize heading to 0-360 range
+                    while (currentHeading < 0) currentHeading += 360.0;
+                    while (currentHeading >= 360.0) currentHeading -= 360.0;
+                }
+                
+                // Handle forward/backward movement (after rotation, if any)
+                double moveDeltaX = 0.0;
+                double moveDeltaY = 0.0;
+                
+                // Recalculate heading in radians after potential rotation
+                headingRad = currentHeading * Math.PI / 180.0;
+                
+                if (moveForwardKey != null && heldDirectionKeys.Contains(moveForwardKey.Value))
+                {
+                    moveDeltaX += Math.Sin(headingRad) * pixelsPerFrame;
+                    moveDeltaY -= Math.Cos(headingRad) * pixelsPerFrame; // Negative because Y increases downward
+                }
+                if (moveBackwardKey != null && heldDirectionKeys.Contains(moveBackwardKey.Value))
+                {
+                    moveDeltaX -= Math.Sin(headingRad) * pixelsPerFrame;
+                    moveDeltaY += Math.Cos(headingRad) * pixelsPerFrame;
+                }
+                
+                // Apply forward/backward movement to new position (after rotation)
+                newX += moveDeltaX;
+                newY += moveDeltaY;
                 
                 // Accumulate fractional movement
-                accumulatedMoveX += moveDeltaX;
-                accumulatedMoveY += moveDeltaY;
+                accumulatedMoveX += (newX - currentPos.X);
+                accumulatedMoveY += (newY - currentPos.Y);
                 
                 // Move cursor by whole pixels, keeping remainder for next frame
                 int moveX = (int)accumulatedMoveX;
@@ -901,8 +1137,66 @@ namespace SansMus
                 // Move the cursor
                 if (moveX != 0 || moveY != 0)
                 {
-                    Point currentPos = Cursor.Position;
-                    Cursor.Position = new Point(currentPos.X + moveX, currentPos.Y + moveY);
+                    Point newPos = new Point(currentPos.X + moveX, currentPos.Y + moveY);
+                    Cursor.Position = newPos;
+                }
+                
+                // Update visualization form (always update, even if only rotation occurred)
+                orbitalVisualizationForm?.UpdateCursorInfo(Cursor.Position, currentHeading);
+            }
+            else
+            {
+                // Directional mode (existing implementation)
+                int deltaX = 0;
+                int deltaY = 0;
+                
+                if (moveUpKey != null && heldDirectionKeys.Contains(moveUpKey.Value))
+                {
+                    deltaY -= 1;
+                }
+                if (moveDownKey != null && heldDirectionKeys.Contains(moveDownKey.Value))
+                {
+                    deltaY += 1;
+                }
+                if (moveLeftKey != null && heldDirectionKeys.Contains(moveLeftKey.Value))
+                {
+                    deltaX -= 1;
+                }
+                if (moveRightKey != null && heldDirectionKeys.Contains(moveRightKey.Value))
+                {
+                    deltaX += 1;
+                }
+                
+                // Normalize diagonal movement to maintain consistent speed
+                double magnitude = Math.Sqrt(deltaX * deltaX + deltaY * deltaY);
+                if (magnitude > 0)
+                {
+                    // Normalize the vector to maintain consistent speed in all directions
+                    double normalizedX = deltaX / magnitude;
+                    double normalizedY = deltaY / magnitude;
+                    
+                    // Calculate movement delta with normalized direction
+                    double moveDeltaX = normalizedX * pixelsPerFrame;
+                    double moveDeltaY = normalizedY * pixelsPerFrame;
+                    
+                    // Accumulate fractional movement
+                    accumulatedMoveX += moveDeltaX;
+                    accumulatedMoveY += moveDeltaY;
+                    
+                    // Move cursor by whole pixels, keeping remainder for next frame
+                    int moveX = (int)accumulatedMoveX;
+                    int moveY = (int)accumulatedMoveY;
+                    
+                    // Keep the fractional part for next frame
+                    accumulatedMoveX -= moveX;
+                    accumulatedMoveY -= moveY;
+                    
+                    // Move the cursor
+                    if (moveX != 0 || moveY != 0)
+                    {
+                        Point currentPos = Cursor.Position;
+                        Cursor.Position = new Point(currentPos.X + moveX, currentPos.Y + moveY);
+                    }
                 }
             }
         }
@@ -913,6 +1207,8 @@ namespace SansMus
             movementTimer?.Dispose();
             keyboardHook?.Dispose();
             overlayForm?.Dispose();
+            orbitalVisualizationForm?.Close();
+            orbitalVisualizationForm?.Dispose();
         }
         
         [STAThread]

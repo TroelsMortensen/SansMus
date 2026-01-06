@@ -59,6 +59,7 @@ namespace SansMus
             this.Size = new System.Drawing.Size(300, 250);
             this.StartPosition = FormStartPosition.CenterScreen;
             this.FormClosing += MainForm_FormClosing;
+            this.Activated += MainForm_Activated;
             
             string hotkeyText = configuredHotkey?.ToString() ?? "SPACE";
             string labelText = $"Press {hotkeyText} to show grid overlay.\nPress ESC in overlay to close.";
@@ -424,10 +425,13 @@ namespace SansMus
                 // Use null as parent to prevent parent form from affecting positioning
                 DialogResult result = overlayForm.ShowDialog(null);
                 
-                if (result == DialogResult.OK && overlayForm.CellSelectedEventArgs != null)
+                // Store CellSelectedEventArgs before disposing, in case it gets cleared
+                CellSelectedEventArgs? selectedCell = overlayForm.CellSelectedEventArgs;
+                
+                if (result == DialogResult.OK && selectedCell != null)
                 {
                     // Move cursor to selected cell center
-                    Cursor.Position = overlayForm.CellSelectedEventArgs.ScreenPosition;
+                    Cursor.Position = selectedCell.ScreenPosition;
                 }
                 
                 overlayForm.Dispose();
@@ -574,6 +578,30 @@ namespace SansMus
             {
                 testButton.Text = $"Test Overlay (Click or Press {hotkeyText})";
                 testButton.Enabled = configuredHotkey != null;
+            }
+        }
+        
+        private void MainForm_Activated(object? sender, EventArgs e)
+        {
+            // Close the overlay if it's open when the main window gets focus
+            // This ensures that clicking on the main window closes the overlay
+            // Don't close if DialogResult is already set (cell was selected) or if overlay is being shown
+            if (overlayForm != null && !overlayForm.IsDisposed)
+            {
+                try
+                {
+                    // Only close if DialogResult is None (not set yet)
+                    // If it's OK, the overlay is closing after cell selection - don't interfere
+                    if (overlayForm.DialogResult == DialogResult.None)
+                    {
+                        overlayForm.DialogResult = DialogResult.Cancel;
+                        overlayForm.Close();
+                    }
+                }
+                catch
+                {
+                    // Ignore errors when closing overlay
+                }
             }
         }
         

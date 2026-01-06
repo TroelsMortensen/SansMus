@@ -69,6 +69,7 @@ namespace SansMus
         
         private string? firstLetter = null;
         private Dictionary<(int row, int col), string> cellLabels = new Dictionary<(int row, int col), string>();
+        private bool isClosing = false;
         
         // Variable cell size fields
         private int baseCellWidth;
@@ -141,6 +142,7 @@ namespace SansMus
             this.KeyDown += GridOverlayForm_KeyDown;
             this.KeyPress += GridOverlayForm_KeyPress;
             this.FormClosing += GridOverlayForm_FormClosing;
+            this.Deactivate += GridOverlayForm_Deactivate;
         }
         
         private void GridOverlayForm_Load(object? sender, EventArgs e)
@@ -453,6 +455,9 @@ namespace SansMus
                     
                     if (cell.Key != default)
                     {
+                        // Mark as closing immediately to prevent Deactivate from interfering
+                        isClosing = true;
+                        
                         // Calculate cell center using variable cell sizes
                         int cellX = GetCellX(cell.Key.col);
                         int cellY = GetCellY(cell.Key.row);
@@ -516,6 +521,9 @@ namespace SansMus
                 
                 if (cell.Key != default)
                 {
+                    // Mark as closing immediately to prevent Deactivate from interfering
+                    isClosing = true;
+                    
                     // Calculate cell center using variable cell sizes
                     int cellX = GetCellX(cell.Key.col);
                     int cellY = GetCellY(cell.Key.row);
@@ -544,9 +552,24 @@ namespace SansMus
         
         private void GridOverlayForm_FormClosing(object? sender, FormClosingEventArgs e)
         {
+            // Mark that we're closing to prevent Deactivate from interfering
+            isClosing = true;
             // Allow all forms of closing - the form should always be closeable
             // ESC, toggle hotkey, Alt+F4, and programmatic close should all work
             // This prevents the form from getting stuck if keyboard input isn't working
+        }
+        
+        private void GridOverlayForm_Deactivate(object? sender, EventArgs e)
+        {
+            // Close the overlay when it loses focus to prevent it from getting stuck
+            // This provides a safety mechanism if the user clicks away or switches windows
+            // Don't close if we're already closing or if DialogResult is already set (cell was selected or form is closing)
+            if (!isClosing && this.DialogResult == DialogResult.None && !this.IsDisposed)
+            {
+                isClosing = true;
+                this.DialogResult = DialogResult.Cancel;
+                this.Close();
+            }
         }
         
         public event EventHandler<CellSelectedEventArgs>? CellSelected;

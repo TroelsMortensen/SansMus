@@ -59,6 +59,20 @@ namespace SansMus
         
         [DllImport("user32.dll")]
         private static extern int ReleaseDC(IntPtr hWnd, IntPtr hDC);
+        
+        // Windows API for character translation from virtual key codes
+        [DllImport("user32.dll")]
+        private static extern int ToUnicodeEx(uint wVirtKey, uint wScanCode, byte[] lpKeyState, 
+            [Out, MarshalAs(UnmanagedType.LPWStr, SizeParamIndex = 4)] System.Text.StringBuilder pwszBuff, 
+            int cchBuff, uint wFlags, IntPtr dwhkl);
+        
+        [DllImport("user32.dll")]
+        private static extern IntPtr GetKeyboardLayout(uint idThread);
+        
+        [DllImport("user32.dll")]
+        private static extern bool GetKeyboardState(byte[] lpKeyState);
+        
+        private const uint MAPVK_VK_TO_VSC = 0x00;
         private readonly int gridRows;
         private readonly int gridCols;
         private readonly double gridOpacity;
@@ -158,6 +172,44 @@ namespace SansMus
             
             // Initialize global keyboard hook to capture input even when overlay doesn't have focus
             InitializeOverlayKeyboardHook();
+        }
+        
+        /// <summary>
+        /// Translates a virtual key code and scan code to the actual character based on current keyboard layout.
+        /// </summary>
+        private string? GetCharacterFromVirtualKey(Keys vkCode, uint scanCode)
+        {
+            try
+            {
+                // Get current keyboard layout
+                IntPtr hkl = GetKeyboardLayout(0);
+                
+                // Get current keyboard state
+                byte[] keyState = new byte[256];
+                if (!GetKeyboardState(keyState))
+                {
+                    return null;
+                }
+                
+                // Translate virtual key code to Unicode character
+                System.Text.StringBuilder sb = new System.Text.StringBuilder(10);
+                int result = ToUnicodeEx((uint)vkCode, scanCode, keyState, sb, sb.Capacity, 0, hkl);
+                
+                // ToUnicodeEx returns:
+                // - Negative: Dead key (e.g., accent)
+                // - 0: No translation
+                // - Positive: Number of characters written
+                if (result > 0 && sb.Length > 0)
+                {
+                    return sb.ToString();
+                }
+            }
+            catch (Exception)
+            {
+                // Silently handle exceptions
+            }
+            
+            return null;
         }
         
         private void InitializeOverlayKeyboardHook()
@@ -419,8 +471,13 @@ namespace SansMus
             // Extract key code to avoid thread marshaling issues
             Keys keyCode = e.KeyCode;
             
+            // Capture scan code early to avoid timing issues
+            uint scanCode = keyboardHook?.LastScanCode ?? 0;
+            
             // Check if this is a key we might handle (mark as handled synchronously to prevent propagation)
             bool mightHandle = false;
+            string? specialCharacter = null;
+            
             if (keyCode >= Keys.A && keyCode <= Keys.Z)
             {
                 mightHandle = true;
@@ -433,6 +490,25 @@ namespace SansMus
             {
                 mightHandle = true;
             }
+            else
+            {
+                // Check if it might be a special character (comma, period, Danish letters, etc.)
+                // Try to translate the key code to a character
+                if (keyboardHook != null && scanCode != 0)
+                {
+                    string? character = GetCharacterFromVirtualKey(keyCode, scanCode);
+                    if (character != null && character.Length > 0)
+                    {
+                        char ch = character[0];
+                        // If it's a printable character that's not A-Z, it might be handled
+                        if (!char.IsControl(ch) && !((ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z')))
+                        {
+                            mightHandle = true;
+                            specialCharacter = character; // Store for later processing
+                        }
+                    }
+                }
+            }
             
             // If it's a key we might handle, mark it as handled immediately to prevent propagation
             // We'll process it asynchronously, but we've already consumed the event
@@ -441,19 +517,100 @@ namespace SansMus
                 keyboardHook.MarkKeyHandled();
             }
             
+            // Capture variables for closure
+            Keys capturedKeyCode = keyCode;
+            string? capturedSpecialChar = specialCharacter;
+            uint capturedScanCode = scanCode;
+            
             // Use BeginInvoke to ensure UI updates happen on the UI thread
             if (this.InvokeRequired)
             {
                 this.BeginInvoke(new Action(() =>
                 {
                     // Create new KeyEventArgs on UI thread
-                    KeyEventArgs uiKeyArgs = new KeyEventArgs(keyCode);
+                    KeyEventArgs uiKeyArgs = new KeyEventArgs(capturedKeyCode);
                     ProcessKeyDown(uiKeyArgs);
+                    
+                    // Also try to process as special character if it's not A-Z
+                    if (capturedKeyCode < Keys.A || capturedKeyCode > Keys.Z)
+                    {
+                        if (capturedSpecialChar != null && capturedSpecialChar.Length > 0)
+                        {
+                            char ch = capturedSpecialChar[0];
+                            // Process special characters (same logic as KeyPress)
+                            if (!char.IsControl(ch) && !((ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z')))
+                            {
+                                ProcessSpecialCharacter(ch);
+                            }
+                        }
+                    }
                 }));
             }
             else
             {
                 ProcessKeyDown(e);
+                
+                // Also try to process as special character if it's not A-Z
+                if (capturedKeyCode < Keys.A || capturedKeyCode > Keys.Z)
+                {
+                    if (capturedSpecialChar != null && capturedSpecialChar.Length > 0)
+                    {
+                        char ch = capturedSpecialChar[0];
+                        // Process special characters (same logic as KeyPress)
+                        if (!char.IsControl(ch) && !((ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z')))
+                        {
+                            ProcessSpecialCharacter(ch);
+                        }
+                    }
+                }
+            }
+        }
+        
+        private void ProcessSpecialCharacter(char ch)
+        {
+            // Convert character to string for matching
+            string charStr = ch.ToString();
+            
+            if (firstLetter == null)
+            {
+                // First character
+                firstLetter = charStr;
+                UpdateLayeredWindowBitmap(); // Redraw to show filtered cells
+            }
+            else
+            {
+                // Second character
+                string targetLabel = firstLetter + charStr;
+                
+                // Find cell with this label
+                var cell = cellLabels.FirstOrDefault(kvp => kvp.Value.Equals(targetLabel, StringComparison.OrdinalIgnoreCase));
+                
+                if (cell.Key != default)
+                {
+                    // Mark as closing immediately to prevent Deactivate from interfering
+                    isClosing = true;
+                    
+                    // Calculate cell center using variable cell sizes
+                    int cellX = GetCellX(cell.Key.col);
+                    int cellY = GetCellY(cell.Key.row);
+                    int cellW = GetCellWidth(cell.Key.col);
+                    int cellH = GetCellHeight(cell.Key.row);
+                    
+                    int centerX = cellX + (cellW / 2);
+                    int centerY = cellY + (cellH / 2);
+                    
+                    // Add screen offset (in case of multi-monitor setup)
+                    Point screenLocation = this.Location;
+                    centerX += screenLocation.X;
+                    centerY += screenLocation.Y;
+                    
+                    // Store event args and trigger event
+                    CellSelectedEventArgs = new CellSelectedEventArgs(cell.Key.row, cell.Key.col, new Point(centerX, centerY));
+                    CellSelected?.Invoke(this, CellSelectedEventArgs);
+                    
+                    this.DialogResult = DialogResult.OK;
+                    this.Close();
+                }
             }
         }
         

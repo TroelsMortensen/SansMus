@@ -23,9 +23,15 @@ namespace SansMus
         private LowLevelKeyboardProc _proc;
         private IntPtr _hookID = IntPtr.Zero;
         private volatile bool _keyHandled = false; // Thread-safe flag to track if key was handled
+        private volatile uint _lastScanCode = 0; // Last scan code from hook (for character translation)
         
         public event KeyEventHandler? KeyDown;
         public event KeyEventHandler? KeyUp;
+        
+        /// <summary>
+        /// Gets the scan code of the last processed key. Used for character translation.
+        /// </summary>
+        public uint LastScanCode => _lastScanCode;
         
         public GlobalKeyboardHook()
         {
@@ -56,6 +62,9 @@ namespace SansMus
                     
                     KBDLLHOOKSTRUCT kbStruct = (KBDLLHOOKSTRUCT)Marshal.PtrToStructure(lParam, typeof(KBDLLHOOKSTRUCT))!;
                     Keys key = (Keys)kbStruct.vkCode;
+                    
+                    // Store scan code for character translation
+                    _lastScanCode = kbStruct.scanCode;
                     
                     KeyEventArgs e = new KeyEventArgs(key);
                     

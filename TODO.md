@@ -1,9 +1,1 @@
-- configuration file:  
-  - grid options
-  - mouse movement options
-
-
-
-Kig senere på at bevæge mus. 
-
-eventually multi monitor support. 
+eventually multi monitor support. Should be simple enough, some day, when I need it.

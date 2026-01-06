@@ -1,7 +1,7 @@
 using System;
 using System.Windows.Forms;
 
-namespace SansMouse
+namespace SansMus
 {
     public partial class MainForm : Form
     {
@@ -16,7 +16,7 @@ namespace SansMouse
         
         private void InitializeComponent()
         {
-            this.Text = "SansMouse - Keyboard Mouse Control";
+            this.Text = "SansMus - Keyboard Mouse Control";
             this.Size = new System.Drawing.Size(300, 200);
             this.StartPosition = FormStartPosition.CenterScreen;
             this.FormClosing += MainForm_FormClosing;

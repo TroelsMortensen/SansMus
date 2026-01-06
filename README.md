@@ -1,10 +1,10 @@
-# SansMouse - Keyboard-Driven Mouse Control
+# SansMus - Keyboard-Driven Mouse Control
 
 A desktop application that provides keyboard-driven mouse control using a grid overlay system, similar to mousemaster. Control your mouse cursor entirely with your keyboard - no mouse required!
 
 ## Overview
 
-SansMouse enables you to control your mouse cursor using only keyboard input. Press a hotkey (Space) to display a full-screen grid overlay with two-letter labels. Type two letters to instantly teleport your cursor to that cell's center. Perfect for accessibility, efficiency, or when you prefer keyboard navigation.
+SansMus enables you to control your mouse cursor using only keyboard input. Press a hotkey (Space) to display a full-screen grid overlay with two-letter labels. Type two letters to instantly teleport your cursor to that cell's center. Perfect for accessibility, efficiency, or when you prefer keyboard navigation.
 
 ## Features
 
@@ -52,7 +52,7 @@ SansMouse enables you to control your mouse cursor using only keyboard input. Pr
    Or build and run the executable:
    ```bash
    dotnet build -c Release
-   .\bin\Release\net8.0-windows\SansMouse.exe
+   .\bin\Release\net8.0-windows\SansMus.exe
    ```
 
 2. **Use the application:**
@@ -101,11 +101,11 @@ The current implementation provides:
 ## Project Structure
 
 ```
-SansMouse/
+SansMus/
 ├── Program.cs          # Main application code
 ├── GridOverlayForm.cs  # Grid overlay window
 ├── KeyboardHook.cs     # Global keyboard hook implementation
-├── SansMouse.csproj    # Project file
+├── SansMus.csproj      # Project file
 └── README.md          # This file
 ```
 

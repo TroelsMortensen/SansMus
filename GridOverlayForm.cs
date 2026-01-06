@@ -546,12 +546,9 @@ namespace SansMus
         
         private void GridOverlayForm_FormClosing(object? sender, FormClosingEventArgs e)
         {
-            // Allow closing via ESC key (DialogResult.Cancel) or programmatic close
-            // Only prevent accidental closure via Alt+F4 or X button
-            if (e.CloseReason == CloseReason.UserClosing && this.DialogResult == DialogResult.None)
-            {
-                e.Cancel = true;
-            }
+            // Allow all forms of closing - the form should always be closeable
+            // ESC, toggle hotkey, Alt+F4, and programmatic close should all work
+            // This prevents the form from getting stuck if keyboard input isn't working
         }
         
         public event EventHandler<CellSelectedEventArgs>? CellSelected;

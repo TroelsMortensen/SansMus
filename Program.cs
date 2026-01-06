@@ -14,6 +14,7 @@ namespace SansMus
         private string? configError = null;
         private Label? infoLabel;
         private Button? testButton;
+        private Button? reloadButton;
         private List<MonitorConfig>? monitorConfigs = null;
         private double gridOpacity = 1.0; // Default: fully opaque grid
         private double gridBackgroundOpacity = 0.7; // Default: 70% opaque background
@@ -56,7 +57,7 @@ namespace SansMus
         private void InitializeComponent()
         {
             this.Text = "SansMus - Keyboard Mouse Control";
-            this.Size = new System.Drawing.Size(300, 200);
+            this.Size = new System.Drawing.Size(300, 250);
             this.StartPosition = FormStartPosition.CenterScreen;
             this.FormClosing += MainForm_FormClosing;
             
@@ -85,6 +86,16 @@ namespace SansMus
             }
             
             this.Controls.Add(infoLabel);
+            
+            reloadButton = new Button
+            {
+                Text = "Reload Config",
+                Dock = DockStyle.Bottom,
+                Height = 30,
+                Enabled = true
+            };
+            reloadButton.Click += ReloadButton_Click;
+            this.Controls.Add(reloadButton);
             
             testButton = new Button
             {
@@ -486,6 +497,97 @@ namespace SansMus
             if (sender is GridOverlayForm form)
             {
                 form.CellSelectedEventArgs = e;
+            }
+        }
+        
+        private void ReloadButton_Click(object? sender, EventArgs e)
+        {
+            ReloadConfig();
+        }
+        
+        private void ReloadConfig()
+        {
+            // Store old hotkey to check if it changed
+            Keys? oldHotkey = configuredHotkey;
+            
+            // Reset state
+            configError = null;
+            duplicateWarning = null;
+            configuredHotkey = null;
+            monitorConfigs = null;
+            gridOpacity = 1.0;
+            gridBackgroundOpacity = 0.7;
+            
+            // Dispose existing keyboard hook
+            if (keyboardHook != null)
+            {
+                keyboardHook.Dispose();
+                keyboardHook = null;
+            }
+            
+            // Reload config
+            try
+            {
+                LoadConfig();
+                
+                // Update UI
+                UpdateUIAfterReload();
+                
+                // Re-initialize keyboard hook if hotkey is valid
+                if (configuredHotkey != null)
+                {
+                    InitializeKeyboardHook();
+                }
+                
+                // Show success message
+                if (infoLabel != null)
+                {
+                    string hotkeyText = configuredHotkey?.ToString() ?? "SPACE";
+                    string message = $"Config reloaded successfully!\nPress {hotkeyText} to show grid overlay.\nPress ESC in overlay to close.";
+                    
+                    if (duplicateWarning != null)
+                    {
+                        message += "\n\n" + duplicateWarning;
+                    }
+                    
+                    infoLabel.Text = message;
+                    
+                    // Set color based on state
+                    if (duplicateWarning != null && configError == null)
+                    {
+                        infoLabel.ForeColor = System.Drawing.Color.Orange;
+                    }
+                    else if (configError == null)
+                    {
+                        infoLabel.ForeColor = System.Drawing.Color.Black;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                configError = ex.Message;
+                configuredHotkey = null;
+                
+                // Update UI to show error
+                UpdateUIAfterReload();
+                
+                if (infoLabel != null)
+                {
+                    infoLabel.Text = $"Configuration Error:\n{configError}\n\nPlease fix config.json and try reloading again.";
+                    infoLabel.ForeColor = System.Drawing.Color.Red;
+                }
+            }
+        }
+        
+        private void UpdateUIAfterReload()
+        {
+            string hotkeyText = configuredHotkey?.ToString() ?? "SPACE";
+            
+            // Update test button
+            if (testButton != null)
+            {
+                testButton.Text = $"Test Overlay (Click or Press {hotkeyText})";
+                testButton.Enabled = configuredHotkey != null;
             }
         }
         

@@ -31,6 +31,8 @@
   "MouseMovement": {
     "ControlScheme": "Directional",
     "DefaultSpeedInPixelsPerSecond": 1500.0,
+    "InitialSpeedFactor": 0.025,
+    "AccelerationDurationMs": 100.0,
     "MoveUp": "F14",
     "MoveDown": "F15",
     "MoveLeft": "F16",

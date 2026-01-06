@@ -36,8 +36,8 @@ namespace SansMus
         
         // Movement acceleration
         private DateTime? movementStartTime = null; // Timestamp when current movement started (null when not moving)
-        private const double ACCELERATION_DURATION_MS = 250.0; // Time to reach full speed (250ms)
-        private const double INITIAL_SPEED_FACTOR = 0.10; // Starting speed as fraction of target speed (10%)
+        private double accelerationDurationMs = 100.0; // Time to reach full speed (100ms) - loaded from config
+        private double initialSpeedFactor = 0.025; // Starting speed as fraction of target speed (2.5%) - loaded from config
         
         // Orbital mouse configuration
         private const double ROTATION_POINT_DISTANCE = 25.0; // Distance behind cursor for rotation point (in pixels)
@@ -300,6 +300,39 @@ namespace SansMus
                             if (defaultSpeedPixelsPerSecond <= 0)
                             {
                                 throw new InvalidOperationException($"DefaultSpeedInPixelsPerSecond must be greater than 0, got {defaultSpeedPixelsPerSecond}.");
+                            }
+                        }
+                    }
+                    
+                    // Parse acceleration settings
+                    if (mouseMovement.TryGetProperty("InitialSpeedFactor", out var initialSpeedFactorProp))
+                    {
+                        if (initialSpeedFactorProp.ValueKind == JsonValueKind.Number)
+                        {
+                            double factor = initialSpeedFactorProp.GetDouble();
+                            if (factor > 0 && factor <= 1.0)
+                            {
+                                initialSpeedFactor = factor;
+                            }
+                            else
+                            {
+                                throw new InvalidOperationException($"InitialSpeedFactor must be greater than 0 and less than or equal to 1.0, got {factor}.");
+                            }
+                        }
+                    }
+                    
+                    if (mouseMovement.TryGetProperty("AccelerationDurationMs", out var accelerationDurationProp))
+                    {
+                        if (accelerationDurationProp.ValueKind == JsonValueKind.Number)
+                        {
+                            double duration = accelerationDurationProp.GetDouble();
+                            if (duration > 0)
+                            {
+                                accelerationDurationMs = duration;
+                            }
+                            else
+                            {
+                                throw new InvalidOperationException($"AccelerationDurationMs must be greater than 0, got {duration}.");
                             }
                         }
                     }
@@ -867,6 +900,10 @@ namespace SansMus
             accumulatedMoveY = 0.0;
             StopMovementTimer();
             
+            // Reset acceleration settings to defaults
+            accelerationDurationMs = 100.0;
+            initialSpeedFactor = 0.025;
+            
             // Reset orbital mouse state
             moveForwardKey = null;
             moveBackwardKey = null;
@@ -1030,10 +1067,10 @@ namespace SansMus
                 double elapsedMs = (DateTime.Now - movementStartTime.Value).TotalMilliseconds;
                 
                 // Clamp elapsed time to acceleration duration
-                elapsedMs = Math.Min(elapsedMs, ACCELERATION_DURATION_MS);
+                elapsedMs = Math.Min(elapsedMs, accelerationDurationMs);
                 
-                // Calculate acceleration factor: linear interpolation from INITIAL_SPEED_FACTOR to 1.0
-                double accelerationFactor = INITIAL_SPEED_FACTOR + (1.0 - INITIAL_SPEED_FACTOR) * (elapsedMs / ACCELERATION_DURATION_MS);
+                // Calculate acceleration factor: linear interpolation from initialSpeedFactor to 1.0
+                double accelerationFactor = initialSpeedFactor + (1.0 - initialSpeedFactor) * (elapsedMs / accelerationDurationMs);
                 
                 // Apply acceleration to base speed
                 return baseSpeed * accelerationFactor;
